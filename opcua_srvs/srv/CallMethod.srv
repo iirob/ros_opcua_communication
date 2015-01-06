@@ -1,0 +1,5 @@
+int32 namespace_index
+string node_id
+opcua_msgs/TypeValue[] data
+---
+opcua_msgs/TypeValue[] data

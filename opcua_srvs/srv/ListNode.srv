@@ -1,0 +1,4 @@
+string node_id
+int32 namespace_index
+---
+string[] data

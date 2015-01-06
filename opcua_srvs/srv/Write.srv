@@ -1,0 +1,18 @@
+int32 namespace_index
+string node_id
+string type
+bool data_bool
+int8 data_int8
+uint8 data_uint8
+int16 data_int16
+uint16 data_uint16
+int32 data_int32
+uint32 data_uint32
+int64 data_int64
+uint64 data_uint64
+float32 data_float
+float64 data_double
+string data_string
+---
+bool success
+string error_message

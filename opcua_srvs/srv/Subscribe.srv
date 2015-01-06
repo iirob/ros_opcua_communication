@@ -1,0 +1,6 @@
+int32 namespace_index
+string node_id
+string callback_topic
+---
+bool success
+string error_message

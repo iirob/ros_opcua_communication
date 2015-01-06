@@ -1,0 +1,5 @@
+int32 namespace_index
+string node_id
+---
+bool success
+string error_message
