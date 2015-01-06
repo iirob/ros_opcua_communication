@@ -1,3 +1,3 @@
-[submodule "freeopcua"]
-	path = freeopcua
+[submodule "opcua_impl_freeopcua/freeopcua"]
+	path = opcua_impl_freeopcua/freeopcua
 	url = git@github.com:iirob/freeopcua.git
