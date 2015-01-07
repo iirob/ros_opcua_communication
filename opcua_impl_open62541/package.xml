@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package>
+  <name>opcua_impl_open62541</name>
+  <version>0.0.1</version>
+  <description>The opcua_impl_open62541 package implemnts ROS bindings for open62541 Open Source implementation of OPC-UA protocol.</description>
+
+  <maintainer email="denis.stogl@kit.edu">Denis Štogl</maintainer>
+
+  <license>LGPLv3</license>
+ 
+  <!-- Url tags are optional, but mutiple are allowed, one per tag -->
+  <!-- Optional attribute type can be: website, bugtracker, or repository -->
+  <!-- Example: -->
+  <!-- <url type="website">http://wiki.ros.org/opcua_impl_freeopcua</url> -->
+
+  <author email="denis.stogl@kit.edu">Denis Štogl</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>opcua_msgs</build_depend>
+  <build_depend>opcua_srvs</build_depend>
+  <build_depend>roscpp</build_depend>
+  <run_depend>opcua_msgs</run_depend>
+  <run_depend>opcua_srvs</run_depend>
+  <run_depend>roscpp</run_depend>
+
+</package>
