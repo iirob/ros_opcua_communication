@@ -12,6 +12,7 @@ add_service_files(
   FILES
   CallMethod.srv
   Connect.srv
+  Disconnect.srv
   ListNode.srv
   Read.srv
   Subscribe.srv

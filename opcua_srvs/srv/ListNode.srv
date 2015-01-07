@@ -1,4 +1,6 @@
 string node_id
 int32 namespace_index
 ---
+bool success
+string error_message
 string[] data

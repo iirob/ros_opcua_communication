@@ -2,4 +2,6 @@ int32 namespace_index
 string node_id
 opcua_msgs/TypeValue[] data
 ---
+bool success
+string error_message
 opcua_msgs/TypeValue[] data
