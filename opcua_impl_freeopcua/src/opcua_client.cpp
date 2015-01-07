@@ -103,7 +103,7 @@ bool disconnect(opcua_srvs::Disconnect::Request &req, opcua_srvs::Disconnect::Re
         
         res.success = false;
         char err_string;
-        sprintf(&err_string, "Dissconect service failed with exception: %s", req.server.c_str(), exc.what());
+        sprintf(&err_string, "Dissconect service failed with exception: %s", exc.what());
         res.error_message = err_string;
     }
     catch (...) {
