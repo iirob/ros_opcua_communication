@@ -1,3 +1,4 @@
+string server
 ---
 bool success
 string error_message
