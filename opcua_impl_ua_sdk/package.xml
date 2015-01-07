@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package>
+  <name>opcua_impl_ua_sdk</name>
+  <version>0.0.2</version>
+  <description>The opcua_impl_ua_sdk package is implementation of ros bindings for OpcUa communication based on Unified Automation SDK.</description>
+
+  <maintainer email="denis.stogl@kit.edu">Denis Štogl</maintainer>
+
+  <license>LGPLv3</license>
+
+ <author email="amartinez@roboconcept.com">Ander Martinez Sola</author>
+ <author email="denis.stogl@kit.edu">Denis Štogl</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>opcua_msgs</build_depend>
+  <build_depend>opcua_srvs</build_depend>
+
+  <run_depend>roscpp</run_depend>
+  <run_depend>opcua_msgs</run_depend>
+  <run_depend>opcua_srvs</run_depend>
+
+</package>
