@@ -17,6 +17,7 @@
   <buildtool_depend>catkin</buildtool_depend>
 
   <run_depend>opcua_impl_freeopcua</run_depend>
+  <run_depend>opcua_impl_ua_sdk</run_depend>
   <run_depend>opcua_msgs</run_depend>
   <run_depend>opcua_srvs</run_depend>
 
