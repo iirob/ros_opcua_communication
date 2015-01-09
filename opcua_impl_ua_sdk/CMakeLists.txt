@@ -11,7 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
  INCLUDE_DIRS include common/include
- LIBRARIES opcua_ua_client
+ LIBRARIES ua_client
  CATKIN_DEPENDS roscpp opcua_msgs opcua_srvs
  DEPENDS uastack
 )
@@ -38,7 +38,7 @@ include_directories(
 )
 
 
-# add_library(opcua_ua_client
+# add_library(ua_client
 #   common/src/SPOPCUAClient.cpp
 #   common/src/SPOPCUATypes.cpp
 #   common/src/SPOPCUASubscription.cpp
@@ -56,7 +56,7 @@ include_directories(
 # 
 # add_executable(client_node src/opcua_client.cpp)
 # target_link_libraries(client_node
-#     opcua_ua_client
+#     ua_client
 #     ${catkin_LIBRARIES}
 # )
 # 
@@ -64,7 +64,7 @@ include_directories(
 # ## Install ##
 # #############
 # 
-# install(TARGETS opcua_ua_client opcua_ua_client_node
+# install(TARGETS ua_client client_node
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

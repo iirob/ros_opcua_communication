@@ -391,25 +391,7 @@ int main (int argc, char** argv)
     ros::ServiceServer disconnect_service = nodeHandle.advertiseService("disconnect", disconnect);
     ROS_INFO("OPC-UA client node %s: 'Disconnect' service available on: %s", ros::this_node::getName().c_str(), disconnect_service.getService().c_str());
 
-    // Reading of data
-    ros::ServiceServer read_service = nodeHandle.advertiseService("read", read);
-    ROS_INFO("OPC-UA client node %s: 'Read' service available on: %s", ros::this_node::getName().c_str(), read_service.getService().c_str());
-    
-    // Writing of data
-    ros::ServiceServer write_service = nodeHandle.advertiseService("write", write);
-    ROS_INFO("OPC-UA client node %s: 'Write' service available on: %s", ros::this_node::getName().c_str(), write_service.getService().c_str());
-    
-    // Method Call
-//     ros::ServiceServer call_method_service = nodeHandle.advertiseService("call_method", call_method);
-//     ROS_INFO("OPC-UA client node %s: 'CallMethod' service available on: %s", ros::this_node::getName().c_str(), call_method_service.getService().c_str());
-
-    // Subscriptions
-    ros::ServiceServer subscribe_service = nodeHandle.advertiseService("subscribe", subscribe);
-    ROS_INFO("OPC-UA client node %s: 'Subscribe' service available on: %s", ros::this_node::getName().c_str(), subscribe_service.getService().c_str());
-    ros::ServiceServer unsubscribe_service = nodeHandle.advertiseService("unsubscribe", unsubscribe);
-    ROS_INFO("OPC-UA client node %s: 'Unsubscribe' service available on: %s", ros::this_node::getName().c_str(), unsubscribe_service.getService().c_str());
-
-
+  
     ROS_INFO("OPCUA client node: %s is ready!", ros::this_node::getName().c_str());
 
     ros::spin();
