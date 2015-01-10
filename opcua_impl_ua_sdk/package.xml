@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
   <name>opcua_impl_ua_sdk</name>
-  <version>0.0.2</version>
+  <version>0.2.0</version>
   <description>The opcua_impl_ua_sdk package is implementation of ros bindings for OpcUa communication based on Unified Automation SDK.</description>
 
   <maintainer email="denis.stogl@kit.edu">Denis Štogl</maintainer>

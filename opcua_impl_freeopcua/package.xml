@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
   <name>opcua_impl_freeopcua</name>
-  <version>0.0.0</version>
+  <version>0.2.0</version>
   <description>The opcua_impl_freeopcua package implements bindings for freeopcua - Open Source C++ OPC-UA Server and Client Library.</description>
 
   <maintainer email="denis.stogl@kit.edu">Denis Štogl</maintainer>
