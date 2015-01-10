@@ -1,0 +1,6 @@
+<launch>
+
+    <node name="opcua_server" pkg="opcua_impl_open62541" type="server_node" output="screen">
+    </node>
+
+</launch>
