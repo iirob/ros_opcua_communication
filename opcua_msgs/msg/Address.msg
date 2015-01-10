@@ -1,0 +1,2 @@
+int32 namespace_index
+string id

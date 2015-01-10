@@ -1,5 +1,4 @@
-int32 namespace_index
-string node_id
+opcua_msgs/Address node
 opcua_msgs/TypeValue[] data
 ---
 bool success
