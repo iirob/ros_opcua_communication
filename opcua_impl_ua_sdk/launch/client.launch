@@ -1,6 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-
-    <node name="opcua_client" pkg="opcua_ua_client" type="opcua_ua_client_node" output="screen"/>
-
-</launch>

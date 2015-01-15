@@ -2,7 +2,7 @@
 <package>
   <name>opcua_communication</name>
   <version>0.1.0</version>
-  <description>The opcua_communication mate-package are ROS bidings for different open- and closed-source OPC-UA implementations. Following implementations are used: Freeopcua (client), UnifiedAutomation (demo client).</description>
+  <description>The opcua_communication mate-package are ROS bidings for different open-source OPC-UA implementations. Following libraries are used FreeOpcUa, open62541.</description>
 
   <maintainer email="denis.stogl@kit.edu">Denis Štogl</maintainer>
 
@@ -18,7 +18,6 @@
 
   <run_depend>opcua_impl_freeopcua</run_depend>
   <run_depend>opcua_impl_open62541</run_depend>
-  <run_depend>opcua_impl_ua_sdk</run_depend>
   <run_depend>opcua_msgs</run_depend>
   <run_depend>opcua_srvs</run_depend>
 
