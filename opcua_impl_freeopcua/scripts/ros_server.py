@@ -32,6 +32,8 @@ class OpcUaROSTopic():
         
         self._recursive_create_items(parent, idx, topic_name, topic_type, self.message_instance)
         
+        self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
+        
     def _recursive_create_items(self, parent, idx, topic_name, type_name, message):
         topic_text = topic_name.split('/')[-1]
         if '[' in topic_text:
@@ -113,6 +115,42 @@ class OpcUaROSTopic():
         
         if array_size is not None: value=[value for i in range(array_size)]
         return parent.add_variable(idx, topic_text, value)
+    
+    def message_callback(self, message):
+        
+        self.update_value(self.name, message)
+        
+    def update_value(self, topic_name, message):
+        
+        if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
+            for slot_name in message.__slots__:
+                self.update_value(topic_name + '/' + slot_name, getattr(message, slot_name))
+
+        elif type(message) in (list, tuple) and (len(message) > 0) and hasattr(message[0], '__slots__'):
+
+            for index, slot in enumerate(message):
+                if topic_name + '[%d]' % index in self._nodes:
+                    self.update_value(topic_name + '[%d]' % index, slot)
+                else:
+                    base_type_str, _ = self._extract_array_info(self._nodes[topic_name].text(self._column_index['type']))
+                    self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index, base_type_str, slot)
+            # remove obsolete children
+            if len(message) < len(self._nodes[topic_name].get_children()):
+                for i in range(len(message), self._nodes[topic_name].childCount()):
+                    item_topic_name = topic_name + '[%d]' % i
+                    self._recursive_delete_items(self._nodes[item_topic_name])
+        else:
+            if topic_name in self._nodes:
+                self._nodes[topic_name].set_value(repr(message))
+                
+    def _recursive_delete_widget_items(self, item):
+        def _recursive_remove_items_from_tree(item):
+            for index in reversed(range(item.childCount())):
+                _recursive_remove_items_from_tree(item.child(index))
+            topic_name = item.data(0, Qt.UserRole)
+            del self._tree_items[topic_name]
+        _recursive_remove_items_from_tree(item)
+        item.parent().removeChild(item)
 
 
 def main(args):
