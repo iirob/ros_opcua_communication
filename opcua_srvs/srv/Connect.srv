@@ -1,4 +1,4 @@
-string server
+string endpoint
 ---
 bool success
 string error_message
