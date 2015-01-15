@@ -12,7 +12,7 @@ find_package(catkin REQUIRED
 find_package(Boost REQUIRED COMPONENTS system thread)
 
 catkin_package(
- INCLUDE_DIRS freeopcua/include
+ INCLUDE_DIRS include freeopcua/include
 #  LIBRARIES opcua_impl_freeopcua
  CATKIN_DEPENDS roscpp opcua_msgs opcua_srvs
 #  DEPENDS system_lib
@@ -25,6 +25,7 @@ catkin_package(
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 include_directories(
+  include
   freeopcua/include
   ${catkin_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
