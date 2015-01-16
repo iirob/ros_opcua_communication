@@ -9,7 +9,6 @@ import datetime
 import time
 import sys
 
-from IPython import embed
 import opcua
 
 
@@ -41,8 +40,8 @@ class OpcUaROSTopic():
        
         # This here are 'complex data'
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
-            new_node = parent.add_object(idx, topic_text)
-            new_node.add_property(idx, "Type", type_name)
+            new_node = parent.add_object(opcua.NodeID(topic_name, parent.get_id().namespace_index), opcua.QualifiedName(parent.get_id().namespace_index,  topic_text))
+            new_node.add_property(opcua.NodeID(topic_name + ".Type", parent.get_id().namespace_index), opcua.QualifiedName(parent.get_id().namespace_index,  "Type"), type_name)
             for slot_name, type_name in zip(message.__slots__, message._slot_types):
                 self._recursive_create_items(new_node, idx, topic_name + '/' + slot_name, type_name, getattr(message, slot_name))
 
@@ -58,7 +57,7 @@ class OpcUaROSTopic():
                 for index in range(array_size):
                     self._recursive_create_items(parent, idx, topic_name + '[%d]' % index, base_type_str, base_instance)
             else:
-                new_node = self._create_node_with_type(parent, idx, topic_text, type_name, array_size)
+                new_node = self._create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size)
         
         self._nodes[topic_name] = new_node
         
@@ -76,45 +75,46 @@ class OpcUaROSTopic():
 
         return type_str, array_size
     
-    def _create_node_with_type(self, parent, idx, topic_text, type_name, array_size):
+    def _create_node_with_type(self, parent, idx, topic_name, topic_text, type_name, array_size):
         
         node = None
+        dv = None
         
         if '[' in type_name:
-            type_name = type_name[:type_name.index('[')]
+            type_name = type_name[:type_name.index('[')]   
         
         if type_name == 'bool':
-            value = False
+            dv = opcua.DataValue(False, opcua.VariantType.BOOLEAN)
         elif type_name == 'byte':
-            value = 0
+            dv = opcua.DataValue(0, opcua.VariantType.BYTE)
         elif type_name == 'int8':
-            value = 0
+            dv = opcua.DataValue(0, opcua.VariantType.SBYTE)
         elif type_name == 'uint8':
-            value = 0
+            dv = opcua.DataValue(0, opcua.VariantType.BYTE)
         elif type_name == 'int16':
-            value = 0
+            dv = opcua.DataValue(0, opcua.VariantType.INT16)
         elif type_name == 'uint16':
-            value = 0
+            dv = opcua.DataValue(0, opcua.VariantType.UINT16)
         elif type_name == 'int32':
-            value = 0
+            dv = opcua.DataValue(0, opcua.VariantType.INT32)
         elif type_name == 'uint32':
-            value = 0
+            dv = opcua.DataValue(0, opcua.VariantType.UINT32)
         elif type_name == 'int64':
-            value = 0
+            dv = opcua.DataValue(0, opcua.VariantType.INT64)
         elif type_name == 'uint64':
-            value = 0
+            dv = opcua.DataValue(0, opcua.VariantType.UINT64)
         elif type_name == 'float':
-            value = 0.0
+            dv = opcua.DataValue(0.0, opcua.VariantType.FLOAT)
         elif type_name == 'double':
-            value = 0.0
+            dv = opcua.DataValue(0.0, opcua.VariantType.DOUBLE)
         elif type_name == 'string':
-            value = ''
+            dv = opcua.DataValue('', opcua.VariantType.STRING)
         else:
             print type_name
             return None
         
         if array_size is not None: value=[value for i in range(array_size)]
-        return parent.add_variable(idx, topic_text, value)
+        return parent.add_variable(opcua.NodeID(topic_name, parent.get_id().namespace_index), opcua.QualifiedName(parent.get_id().namespace_index,  topic_text), dv.value)
     
     def message_callback(self, message):
         
