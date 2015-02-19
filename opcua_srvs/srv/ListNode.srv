@@ -2,4 +2,4 @@ opcua_msgs/Address node
 ---
 bool success
 string error_message
-string[] data
+opcua_msgs/Address[] childs

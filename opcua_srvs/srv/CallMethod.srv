@@ -1,4 +1,5 @@
 opcua_msgs/Address node
+opcua_msgs/Address method
 opcua_msgs/TypeValue[] data
 ---
 bool success
