@@ -84,7 +84,9 @@ class OpcUaROSTopic():
             type_name = type_name[:type_name.index('[')]   
         
         if type_name == 'bool':
-            dv = opcua.DataValue(False, opcua.VariantType.BOOLEAN)
+            dv = opcua.Variant(False, opcua.VariantType.BOOLEAN)
+            print dv
+            print dv.type()
         elif type_name == 'byte':
             dv = opcua.DataValue(0, opcua.VariantType.BYTE)
         elif type_name == 'int8':
@@ -99,6 +101,7 @@ class OpcUaROSTopic():
             dv = opcua.DataValue(0, opcua.VariantType.INT32)
         elif type_name == 'uint32':
             dv = opcua.DataValue(0, opcua.VariantType.UINT32)
+            print dv.value
         elif type_name == 'int64':
             dv = opcua.DataValue(0, opcua.VariantType.INT64)
         elif type_name == 'uint64':

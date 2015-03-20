@@ -23,6 +23,7 @@
  */
 
 #include <ros/ros.h>
+#include <signal.h>
 
 #include <opcua_helpers.h>
 
@@ -147,18 +148,20 @@ bool disconnect(opcua_srvs::Disconnect::Request &req, opcua_srvs::Disconnect::Re
  */
 bool list_node(opcua_srvs::ListNode::Request &req, opcua_srvs::ListNode::Response &res)
 {
-    ROS_DEBUG("OPC-UA client node %s: 'ListNode' service called with id_type: %s and namespace_index: %d parameters", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+    ROS_DEBUG("OPC-UA client node %s: 'ListNode' service called with node Id: %s parameters", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
 
     try {
-      OpcUa::Node node = _client.GetNode(convertAddressToNodeID(req.node));
+      OpcUa::Node node = _client.GetNode(req.node.nodeId);
 
       for (OpcUa::Node child : node.GetChildren()){
-          res.childs.push_back(convertNodeIDToAddress(child.GetId()));
+          opcua_msgs::Address address;
+          address.nodeId = OpcUa::ToString(child.GetId());
+          res.childs.push_back(address);
       }
       res.success = true;
     }
     catch (const std::exception& exc){
-            ROS_ERROR("OPC-UA client node %s: 'ListNode' service called with id_type: %s, namespace_index: %d, parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index, exc.what());
+            ROS_ERROR("OPC-UA client node %s: 'ListNode' service called with node Id: %s, parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.nodeId.c_str(), exc.what());
 
             res.success = false;
             char err_string;
@@ -167,7 +170,7 @@ bool list_node(opcua_srvs::ListNode::Request &req, opcua_srvs::ListNode::Respons
         }
         catch (...)
         {
-            ROS_ERROR("OPC-UA client node %s: 'ListNode' service called with id_type: %s, namespace_index: %d parameters failed! Unknown exception!", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+            ROS_ERROR("OPC-UA client node %s: 'ListNode' service called with node Id: %s parameters failed! Unknown exception!", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
 
             res.success = false;
             res.error_message = "ListNode service failed with Unknown exception";
@@ -177,11 +180,11 @@ bool list_node(opcua_srvs::ListNode::Request &req, opcua_srvs::ListNode::Respons
 
 bool call_method(opcua_srvs::CallMethod::Request &req, opcua_srvs::CallMethod::Response &res)
 {
-    ROS_DEBUG("OPC-UA client node %s: 'CallMethod' service called with id_type: %s, id: %s, namespace_index: %d parameters", ros::this_node::getName().c_str(), req.node.id_type.c_str(),  req.node.namespace_index);
+    ROS_DEBUG("OPC-UA client node %s: 'CallMethod' service called with node Id: %s parameters", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
 
     try {
-        OpcUa::Node node = _client.GetNode(convertAddressToNodeID(req.node));
-        OpcUa::NodeID method_id = convertAddressToNodeID(req.method);
+        OpcUa::Node node = _client.GetNode(req.node.nodeId);
+        OpcUa::NodeID method_id = OpcUa::ToNodeID(req.method.nodeId);
         std::vector<OpcUa::Variant> inputArguments;
 
         for (opcua_msgs::TypeValue typeValue : req.data) {
@@ -198,7 +201,7 @@ bool call_method(opcua_srvs::CallMethod::Request &req, opcua_srvs::CallMethod::R
 
     }
     catch (const std::exception& exc){
-        ROS_ERROR("OPC-UA client node %s: 'CallMethod' service called with id_type: %s, namespace_index: %d, parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index, exc.what());
+        ROS_ERROR("OPC-UA client node %s: 'CallMethod' service called with node Id: %s, parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.nodeId.c_str(), exc.what());
 
         res.success = false;
         char err_string;
@@ -207,7 +210,7 @@ bool call_method(opcua_srvs::CallMethod::Request &req, opcua_srvs::CallMethod::R
     }
     catch (...)
     {
-        ROS_ERROR("OPC-UA client node %s: 'CallMethod' service called with id_type: %s, namespace_index: %d parameters failed! Unknown exception!", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+        ROS_ERROR("OPC-UA client node %s: 'CallMethod' service called with node Id: %s parameters failed! Unknown exception!", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
 
         res.success = false;
         res.error_message = "Call method service failed with Unknown exception";
@@ -223,10 +226,10 @@ bool call_method(opcua_srvs::CallMethod::Request &req, opcua_srvs::CallMethod::R
  */
 bool read(opcua_srvs::Read::Request &req, opcua_srvs::Read::Response &res)
 {
-    ROS_DEBUG("OPC-UA client node %s: 'Read' service called with id_type: %s and namespace_index: %d parameters", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+    ROS_DEBUG("OPC-UA client node %s: 'Read' service called with node Id: %s parameters", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
     
     try {
-        OpcUa::Node variable = _client.GetNode(convertAddressToNodeID(req.node));
+        OpcUa::Node variable = _client.GetNode(req.node.nodeId);
         
         res.success = true;
         res.data = convertVariantToTypeValue(variable.GetValue());
@@ -240,7 +243,7 @@ bool read(opcua_srvs::Read::Request &req, opcua_srvs::Read::Response &res)
         }
     }
     catch (const std::exception& exc){        
-        ROS_ERROR("OPC-UA client node %s: 'Read' service called with id_type: %s, namespace_index: %d, parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index, exc.what());
+        ROS_ERROR("OPC-UA client node %s: 'Read' service called with node Id: %s, parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.nodeId.c_str(), exc.what());
         
         res.success = false;
         char err_string;
@@ -249,7 +252,7 @@ bool read(opcua_srvs::Read::Request &req, opcua_srvs::Read::Response &res)
     }
     catch (...)
     {
-        ROS_ERROR("OPC-UA client node %s: 'Read' service called with id_type: %s, namespace_index: %d parameters failed! Unknown exception!", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+        ROS_ERROR("OPC-UA client node %s: 'Read' service called with node Id: %s parameters failed! Unknown exception!", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
         
         res.success = false;
         res.error_message = "Read service failed with Unknown exception";
@@ -265,10 +268,10 @@ bool read(opcua_srvs::Read::Request &req, opcua_srvs::Read::Response &res)
  */
 bool write(opcua_srvs::Write::Request &req, opcua_srvs::Write::Response &res)
 {
-    ROS_DEBUG("OPC-UA client node %s: 'Write' service called with namespace_index: %d, id: %s,  type: '%s' parameters", ros::this_node::getName().c_str(), req.node.namespace_index, req.node.id_type.c_str(), req.data.type.c_str());
+    ROS_DEBUG("OPC-UA client node %s: 'Write' service called with node Id: %s, parameters", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
     
     try {
-        OpcUa::Node variable = _client.GetNode(convertAddressToNodeID(req.node));
+        OpcUa::Node variable = _client.GetNode(req.node.nodeId);
         
         OpcUa::Variant variant = convertTypeValueToVariant(req.data);
 
@@ -285,7 +288,7 @@ bool write(opcua_srvs::Write::Request &req, opcua_srvs::Write::Response &res)
         }
     }
     catch (const std::exception& exc){        
-        ROS_ERROR("OPC-UA client node %s: 'Write' service called with id_type: %s, namespace_index: %d, type: '%s' parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index, req.data.type.c_str(), exc.what());
+        ROS_ERROR("OPC-UA client node %s: 'Write' service called with node Id: %s, type: '%s' parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.nodeId.c_str(), req.data.type.c_str(), exc.what());
         
         res.success = false;
 	char err_string;
@@ -294,7 +297,7 @@ bool write(opcua_srvs::Write::Request &req, opcua_srvs::Write::Response &res)
     }
     catch (...)
     {
-        ROS_ERROR("OPC-UA client node %s: 'Write' service called with id_type: %s, namespace_index: %d, type: '%s' parameters failed! Unknown exception!", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index, req.data.type.c_str());
+        ROS_ERROR("OPC-UA client node %s: 'Write' service called with node Id: %s, type: '%s' parameters failed! Unknown exception!", ros::this_node::getName().c_str(), req.node.nodeId.c_str(), req.data.type.c_str());
         
         res.success = false;
         res.error_message = "Write service failed with Unknown exception";
@@ -312,12 +315,12 @@ bool write(opcua_srvs::Write::Request &req, opcua_srvs::Write::Response &res)
 /** @todo can subscribe on only one node */
 bool subscribe(opcua_srvs::Subscribe::Request &req, opcua_srvs::Subscribe::Response &res)
 {
-    ROS_DEBUG("OPC-UA client node %s: 'Subscribe' service called with id_type: %s, namespace_index: %d parameters", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+    ROS_DEBUG("OPC-UA client node %s: 'Subscribe' service called with node Id: %s parameters", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
     
     try {
         // TODO: Check if already subscribed to node
         
-        OpcUa::Node variable = _client.GetNode(convertAddressToNodeID(req.node));
+        OpcUa::Node variable = _client.GetNode(req.node.nodeId);
         std::string node_string = OpcUa::ToString(variable.GetId());
         
         ros::NodeHandle nodeHandle("~");
@@ -330,7 +333,7 @@ bool subscribe(opcua_srvs::Subscribe::Request &req, opcua_srvs::Subscribe::Respo
         res.success = true;    
     }
     catch (const std::exception& exc){        
-        ROS_ERROR("OPC-UA client node %s: 'Subscribe' service called with id_type: %s, namespace_index: %d parameters failed!", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+        ROS_ERROR("OPC-UA client node %s: 'Subscribe' service called with node Id: %s parameters failed!", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
         
         res.success = false;
         char err_string;
@@ -339,7 +342,7 @@ bool subscribe(opcua_srvs::Subscribe::Request &req, opcua_srvs::Subscribe::Respo
     }
     catch (...)
     {
-        ROS_ERROR("OPC-UA client node %s: 'Subscribe' service called with id_type: %s, namespace_index: %d parameters failed!", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+        ROS_ERROR("OPC-UA client node %s: 'Subscribe' service called with node Id: %s parameters failed!", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
         
         res.success = false;
         res.error_message = "Subscribe service failed with Unknown exception";
@@ -356,14 +359,14 @@ bool subscribe(opcua_srvs::Subscribe::Request &req, opcua_srvs::Subscribe::Respo
  */
 bool unsubscribe(opcua_srvs::Unsubscribe::Request &req, opcua_srvs::Unsubscribe::Response &res)
 {
-    ROS_DEBUG("OPC-UA client node %s: 'Unsubscribe' service called with id_type: %s, namespace_index: %d parameters", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+    ROS_DEBUG("OPC-UA client node %s: 'Unsubscribe' service called with node Id: %s parameters", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
 
     try {
         // TODO: Check if already subscribed to node
         
         // TODO: Why is here return status false even the subscription was ok?
         
-        OpcUa::Node variable = _client.GetNode(convertAddressToNodeID(req.node));        
+        OpcUa::Node variable = _client.GetNode(req.node.nodeId);
         std::string node_string = OpcUa::ToString(variable.GetId());
         
         _subscriptions[node_string]->UnSubscribe(_subscription_handles[node_string]);
@@ -377,7 +380,7 @@ bool unsubscribe(opcua_srvs::Unsubscribe::Request &req, opcua_srvs::Unsubscribe:
         res.success = true; 
     }
     catch (const std::exception& exc){        
-       ROS_ERROR("OPC-UA client node %s: 'Unsubscribe' service called with id_type: %s, namespace_index: %d parameters failed!", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+       ROS_ERROR("OPC-UA client node %s: 'Unsubscribe' service called with node Id: %s parameters failed!", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
         
         res.success = false;
         char err_string;
@@ -386,13 +389,23 @@ bool unsubscribe(opcua_srvs::Unsubscribe::Request &req, opcua_srvs::Unsubscribe:
     }
     catch (...)
     {
-        ROS_ERROR("OPC-UA client node %s: 'Unsubscribe' service called with id_type: %s, namespace_index: %d parameters failed!", ros::this_node::getName().c_str(), req.node.id_type.c_str(), req.node.namespace_index);
+        ROS_ERROR("OPC-UA client node %s: 'Unsubscribe' service called with node Id: %s parameters failed!", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
         
         res.success = false;
         res.error_message = "Unsubscribe service failed with Unknown exception";
     }
     
     return true;
+}
+
+/**
+ * Handler for Shutdown of the node
+ */
+void on_shutdown(int sig)
+{
+  _client.Disconnect();
+
+  ros::shutdown();
 }
 
 /**
@@ -408,6 +421,7 @@ int main (int argc, char** argv)
 
     ros::init(argc, argv, "opcua_client_node");
     ros::NodeHandle nodeHandle("~");
+    signal(SIGINT, on_shutdown);
 
     ros::ServiceServer connect_service = nodeHandle.advertiseService("connect", connect);
     ROS_INFO("OPC-UA client node %s: 'Connect' service available on on: %s", ros::this_node::getName().c_str(), connect_service.getService().c_str());

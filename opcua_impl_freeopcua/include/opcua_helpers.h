@@ -62,52 +62,52 @@ std::map<int, std::string> _TypeToStringMap = {
  * @param address address to convert.
  * @return NodeID object created from address.
  */
-OpcUa::NodeID convertAddressToNodeID(const opcua_msgs::Address address) {
-       
-    if (address.id_type == "num") {
-        return OpcUa::NumericNodeID(address.id_num, address.namespace_index);
-    }
-    else if (address.id_type == "str") {
-        return OpcUa::StringNodeID(address.id_str, address.namespace_index);
-    }
-    else if (address.id_type == "guid") {
-        return OpcUa::GuidNodeID(OpcUa::ToGuid(address.id_guid), address.namespace_index);
-    }
-    else {
-        ROS_ERROR("OPC-UA client node %s: ID type %s does not exist!!", ros::this_node::getName().c_str(), address.id_type.c_str());
-        throw std::exception();
-    }
-}
+//OpcUa::NodeID convertAddressToNodeID(const opcua_msgs::Address address) {
+//
+//    if (address.id_type == "num") {
+//        return OpcUa::NumericNodeID(address.id_num, address.namespace_index);
+//    }
+//    else if (address.id_type == "str") {
+//        return OpcUa::StringNodeID(address.id_str, address.namespace_index);
+//    }
+//    else if (address.id_type == "guid") {
+//        return OpcUa::GuidNodeID(OpcUa::ToGuid(address.id_guid), address.namespace_index);
+//    }
+//    else {
+//        ROS_ERROR("OPC-UA client node %s: ID type %s does not exist!!", ros::this_node::getName().c_str(), address.id_type.c_str());
+//        throw std::exception();
+//    }
+//}
 
 /**
  * This function converts between OpcUa::NodeID data type into opcua_msgs::Address data type.
  * @param nodeID nodeId to convert.
  * @return Address object created from nodeID.
  */
-opcua_msgs::Address convertNodeIDToAddress(const OpcUa::NodeID nodeID) {
-
-    opcua_msgs::Address address;
-    address.namespace_index = nodeID.GetNamespaceIndex();
-
-    if (nodeID.IsInteger()) {
-        address.id_type = "num";
-        address.id_num = nodeID.GetIntegerIdentifier();
-    }
-    else if (nodeID.IsString()) {
-        address.id_type = "str";
-        address.id_str = nodeID.GetStringIdentifier();
-    }
-    else if (nodeID.IsGuid()) {
-        address.id_type = "guid";
-        address.id_guid = OpcUa::ToString(nodeID.GetGuidIdentifier());
-    }
-    else {
-        ROS_ERROR("OPC-UA client node %s: ID type %s does not exist!!", ros::this_node::getName().c_str(), address.id_type.c_str());
-        throw std::exception();
-    }
-
-    return address;
-}
+//opcua_msgs::Address convertNodeIDToAddress(const OpcUa::NodeID nodeID) {
+//
+//    opcua_msgs::Address address;
+//    address.namespace_index = nodeID.GetNamespaceIndex();
+//
+//    if (nodeID.IsInteger()) {
+//        address.id_type = "num";
+//        address.id_num = nodeID.GetIntegerIdentifier();
+//    }
+//    else if (nodeID.IsString()) {
+//        address.id_type = "str";
+//        address.id_str = nodeID.GetStringIdentifier();
+//    }
+//    else if (nodeID.IsGuid()) {
+//        address.id_type = "guid";
+//        address.id_guid = OpcUa::ToString(nodeID.GetGuidIdentifier());
+//    }
+//    else {
+//        ROS_ERROR("OPC-UA client node %s: ID type %s does not exist!!", ros::this_node::getName().c_str(), address.id_type.c_str());
+//        throw std::exception();
+//    }
+//
+//    return address;
+//}
 
 // OpcUa::NodeID convertAddressToString(const opcua_msgs::Address address) {
 //        
