@@ -1,6 +1,6 @@
 <launch>
 
-    <arg name="namespace" default=""/>
+    <arg name="namespace" default="opcua"/>
 
     <node ns="$(arg namespace)" name="opcua_client" pkg="opcua_impl_freeopcua" type="client_node" output="screen">
     </node>
