@@ -53,6 +53,8 @@ std::map<std::string, ros::Publisher> _callback_publishers;
 /// List of subscription handles
 /** Key is OpcUa string node identifier and value is node handle. This is needed for deteting of subscriptions*/
 std::map<std::string, uint32_t> _subscription_handles;
+/// Connected status variable
+bool _connected = false;
 
 /// Subscription client class handles subscription callbacks.
 /**
@@ -93,6 +95,7 @@ bool connect(opcua_srvs::Connect::Request &req, opcua_srvs::Connect::Response &r
         _client.Connect(req.endpoint);
         ROS_INFO("Connection to OPC-UA server on address '%s' established!", req.endpoint.c_str());
         res.success = true;
+        _connected = true;
     }
     catch (const std::exception& exc){
         ROS_ERROR("OPC-UA client node %s: Connection to OPC-UA server on address %s failed! Message: %s", ros::this_node::getName().c_str(), req.endpoint.c_str(), exc.what());
@@ -122,6 +125,7 @@ bool disconnect(opcua_srvs::Disconnect::Request &req, opcua_srvs::Disconnect::Re
     try {
         _client.Disconnect();
         ROS_INFO("Disconnection succeded!");
+        _connected = false;
     }
     catch (const std::exception& exc){
         ROS_ERROR("OPC-UA client node %s: Disconnection failed! (maybe client was not connected before?). Message: %s", ros::this_node::getName().c_str(), exc.what());
@@ -155,7 +159,8 @@ bool list_node(opcua_srvs::ListNode::Request &req, opcua_srvs::ListNode::Respons
       for (OpcUa::Node child : node.GetChildren()){
           opcua_msgs::Address address;
           address.nodeId = OpcUa::ToString(child.GetId());
-          res.childs.push_back(address);
+          address.qualifiedName = child.GetName().Name;
+          res.children.push_back(address);
       }
       res.success = true;
     }
