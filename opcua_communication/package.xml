@@ -16,10 +16,10 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
-  <run_depend>opcua_impl_freeopcua</run_depend>
-  <run_depend>opcua_impl_open62541</run_depend>
   <run_depend>opcua_msgs</run_depend>
   <run_depend>opcua_srvs</run_depend>
+  <run_depend>opcua_impl_freeopcua</run_depend>
+  <run_depend>opcua_impl_open62541</run_depend>
 
   <export>
     <metapackage/>

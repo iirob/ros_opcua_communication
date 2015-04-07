@@ -33,6 +33,8 @@ include_directories(
 
 add_executable(client_node src/opcua_client.cpp)
 
+add_dependencies(client_node opcua_msgs_generate_messages_cpp opcua_srvs_generate_messages_cpp)
+
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
 # add_dependencies(opcua_impl_freeopcua_node opcua_impl_freeopcua_generate_messages_cpp)
