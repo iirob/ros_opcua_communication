@@ -1,7 +1,14 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(opcua_impl_freeopcua)
 
-set(FreeOpcUa_LIBRARIES /home/stogl/workspace/ros_devel/src/opcua_communication/opcua_impl_freeopcua/freeopcua/build/bin/opcua.so)
+set(BUILD_CLIENT ON)
+set(BUILD_SERVER ON)
+set(BUILD_PYTHON ON)
+set(BUILD_TESTING OFF)
+
+add_subdirectory(freeopcua)
+
+set(FreeOpcUa_LIBRARIES opcua)
 
 find_package(catkin REQUIRED
   roscpp
