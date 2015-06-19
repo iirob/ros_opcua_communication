@@ -19,7 +19,7 @@
  *              You should have received a copy of the GNU Lesser General Public License
  *              along with SkillPro-Framework. If not, see <http://www.gnu.org/licenses/>.
  *
- * @todo        Would be cool to have dignostic topic to write subscirptions and stuff
+ * @todo        Would be cool to have dignostic topic to write subscriptions and stuff
  */
 
 #include <ros/ros.h>
@@ -43,7 +43,7 @@
 #include <opc/ua/subscription.h>
 
 /// Client variable
-OpcUa::UaClient _client;
+OpcUa::UaClient _client(true);
 /// Subscription list
 /** Key is OpcUa string node identifier and value subscription reference.*/
 std::map<std::string, std::unique_ptr<OpcUa::Subscription>> _subscriptions;
@@ -284,11 +284,11 @@ bool write(opcua_srvs::Write::Request &req, opcua_srvs::Write::Response &res)
         OpcUa::Variant variant = convertTypeValueToVariant(req.data);
 
         if (!variant.IsNul()) {
-          if (variant.Type() == OpcUa::VariantType::STRING) {
-            if (((std::string)variant).length() == 0) {
-              variant = std::string(" ");
-            }
-          }
+//           if (variant.Type() == OpcUa::VariantType::STRING) {
+//             if (((std::string)variant).length() == 0) {
+//               variant = std::string(" ");
+//             }
+//           }
           variable.SetValue(variant);
           res.success = true;
         }
