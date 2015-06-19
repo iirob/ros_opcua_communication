@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package>
+  <name>opcua_impl_python_opcua</name>
+  <version>0.0.1</version>
+  <description>The opcua_impl_python_opcua package implement binding for python-opcua - Pure Python OPC-UA / IEC 62541 Client and Server library.</description>
+
+  <!-- One maintainer tag required, multiple allowed, one person per tag --> 
+  <!-- Example:  -->
+  <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
+  <maintainer email="denis.stogl@kit.edu">Denis Štogl</maintainer>
+
+  <license>LGPLv3</license>
+
+  <!-- Url tags are optional, but mutiple are allowed, one per tag -->
+  <!-- Optional attribute type can be: website, bugtracker, or repository -->
+  <!-- Example: -->
+  <!-- <url type="website">http://wiki.ros.org/opcua_impl_python_opcua</url> -->
+
+  <author email="denis.stogl@kit.edu">Denis Štogl</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>opcua_msgs</build_depend>
+  <build_depend>opcua_srvs</build_depend>
+  <build_depend>rospy</build_depend>
+  <run_depend>opcua_msgs</run_depend>
+  <run_depend>opcua_srvs</run_depend>
+  <run_depend>rospy</run_depend>
+
+</package>
