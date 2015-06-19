@@ -4,3 +4,6 @@
 [submodule "opcua_impl_open62541/open62541"]
 	path = opcua_impl_open62541/open62541
 	url = git@github.com:acplt/open62541.git
+[submodule "opcua_impl_python_opcua/python-opcua"]
+	path = opcua_impl_python_opcua/python-opcua
+	url = https://github.com/FreeOpcUa/python-opcua.git
