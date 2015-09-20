@@ -43,7 +43,7 @@
 #include <opc/ua/subscription.h>
 
 /// Client variable
-OpcUa::UaClient _client(true);
+OpcUa::UaClient _client(false);
 /// Subscription list
 /** Key is OpcUa string node identifier and value subscription reference.*/
 std::map<std::string, std::unique_ptr<OpcUa::Subscription>> _subscriptions;
@@ -155,8 +155,14 @@ bool list_node(opcua_srvs::ListNode::Request &req, opcua_srvs::ListNode::Respons
 {
     ROS_DEBUG("OPC-UA client node %s: 'ListNode' service called with node Id: %s parameters", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
 
+    OpcUa::Node node;
     try {
-      OpcUa::Node node = _client.GetNode(req.node.nodeId);
+      if (req.node.nodeId == "") {
+          node = _client.GetObjectsNode();
+      }
+      else {
+        node = _client.GetNode(req.node.nodeId);
+      }
 
       for (OpcUa::Node child : node.GetChildren()){
           opcua_msgs::Address address;
@@ -429,9 +435,6 @@ void on_shutdown(int sig)
  */
 int main (int argc, char** argv)
 {
-    bool debug = true;
-    OpcUa::UaClient _client(debug);
-
     ros::init(argc, argv, "opcua_client_node");
     ros::NodeHandle nodeHandle("~");
     signal(SIGINT, on_shutdown);
