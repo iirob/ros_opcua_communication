@@ -196,7 +196,7 @@ OpcUa::Variant convertTypeValueToVariant(opcua_msgs::TypeValue& typeValue)
     OpcUa::Variant variant;
 
     if (typeValue.type == "bool") {
-        variant = typeValue.bool_d;
+        variant = bool(typeValue.bool_d);
     }
     else if (typeValue.type == "int8") {
         variant = typeValue.int8_d;
