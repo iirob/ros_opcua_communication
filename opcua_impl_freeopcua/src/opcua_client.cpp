@@ -70,7 +70,7 @@ class SubClient : public OpcUa::SubscriptionHandler
    * @param attr OpcUa Attribute Id
    */
   void DataChange(uint32_t handle, const OpcUa::Node& node, const
-OpcUa::Variant& value, OpcUa::AttributeId attr) const override
+OpcUa::Variant& value, OpcUa::AttributeId attr) override
   {
     ROS_DEBUG("Callback....");
     _callback_publishers[OpcUa::ToString(node.GetId())].publish(convertVariantToTypeValue(value));
