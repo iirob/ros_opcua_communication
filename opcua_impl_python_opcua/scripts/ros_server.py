@@ -80,6 +80,7 @@ class OpcUaROSTopic():
                     self._recursive_create_items(parent, idx, topic_name + '[%d]' % index, base_type_str, base_instance)
             else:
                 new_node = self._create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size)
+                print new_node
                 #TODO: add option if to get data back
                 self._subscribers[topic_name] = server.create_subscription(500, SubHandler())
                 self._handles[topic_name] = self._subscribers[topic_name].subscribe_data_change(new_node)
@@ -126,9 +127,9 @@ class OpcUaROSTopic():
             variant = opcua.ua.Variant(0, opcua.ua.VariantType.Int64)
         elif type_name == 'uint64':
             variant = opcua.ua.Variant(0, opcua.ua.VariantType.UInt64)
-        elif type_name == 'float':
+        elif type_name == 'float32':
             variant = opcua.ua.Variant(0.0, opcua.ua.VariantType.Float)
-        elif type_name == 'double':
+        elif type_name == 'float64':
             variant = opcua.ua.Variant(0.0, opcua.ua.VariantType.Double)
         elif type_name == 'string':
             variant = opcua.ua.Variant('', opcua.ua.VariantType.String)
@@ -182,11 +183,18 @@ class OpcUaROSTopic():
         item.parent().removeChild(item)
 
 
+def shutdown():
+    global server
+
+    server.stop()
+
+
 def main(args):
 
     global server
 
     rospy.init_node("opcua_server")
+    rospy.on_shutdown(shutdown)
 
     #TODO: setup library logging
     #logging.basicConfig(level=logging.WARN)
@@ -215,6 +223,7 @@ def main(args):
         for topic_name, topic_type in ros_topics:
             OpcUaROSTopic(topics, idx, topic_name, topic_type)
 
+        rospy.loginfo("Now doing rospy.spin")
         rospy.spin()
 
     except rospy.ROSInterruptException:
