@@ -12,14 +12,16 @@ import sys
 
 import opcua
 
+import logging
+
 
 global server
 
 
-class SubHandler(object):
+#class SubHandler(object):
 
-    def data_change(self, handle, node, val, attr):
-        print("Python: New data change event", handle, node, val, attr)
+    #def data_change(self, handle, node, val, attr):
+        #print("Python: New data change event", handle, node, val, attr)
 
 
 class OpcUaROSTopic():
@@ -31,7 +33,7 @@ class OpcUaROSTopic():
         self.type_name = topic_type
         self.name = topic_name
 
-        self._nodes = {}
+        self.nodes = {}
 
         self.message_class = None
         try:
@@ -45,7 +47,7 @@ class OpcUaROSTopic():
         self._subscribers = {}
         self._handles = {}
 
-        self._recursive_create_items(parent, idx, topic_name, topic_type, self.message_instance, True)
+        self._recursive_create_items(parent, idx, self.name, self.type_name, self.message_instance, True)
 
         self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
         self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=1)
@@ -63,7 +65,11 @@ class OpcUaROSTopic():
             #TODO: add option if to get data back
             if top_level:
                 new_node.add_method(opcua.ua.NodeId(topic_name + ".Update", parent.nodeid.NamespaceIndex), opcua.ua.QualifiedName("Update", parent.nodeid.NamespaceIndex), self.opcua_update_callback, [], [])
+
             for slot_name, type_name in zip(message.__slots__, message._slot_types):
+                #splitter = '.'
+                #if top_level:
+                    #splitter = '/'
                 self._recursive_create_items(new_node, idx, topic_name + '/' + slot_name, type_name, getattr(message, slot_name))
 
         else:
@@ -80,12 +86,11 @@ class OpcUaROSTopic():
                     self._recursive_create_items(parent, idx, topic_name + '[%d]' % index, base_type_str, base_instance)
             else:
                 new_node = self._create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size)
-                print new_node
                 #TODO: add option if to get data back
-                self._subscribers[topic_name] = server.create_subscription(500, SubHandler())
-                self._handles[topic_name] = self._subscribers[topic_name].subscribe_data_change(new_node)
+                #self._subscribers[topic_name] = server.create_subscription(500, SubHandler())
+                #self._handles[topic_name] = self._subscribers[topic_name].subscribe_data_change(new_node)
 
-        self._nodes[topic_name] = new_node
+        self.nodes[topic_name] = new_node
 
         return
 
@@ -140,7 +145,7 @@ class OpcUaROSTopic():
         if array_size is not None:
             value = [value for i in range(array_size)]
 
-        return parent.add_variable(opcua.ua.NodeId(topic_name, parent.nodeid.NamespaceIndex), opcua.ua.QualifiedName(topic_text, parent.nodeid.NamespaceIndex), variant.Value)
+        return parent.add_variable(opcua.ua.NodeId(topic_name, parent.nodeid.NamespaceIndex), opcua.ua.QualifiedName(topic_text, parent.nodeid.NamespaceIndex), variant)
 
     def message_callback(self, message):
         self.update_value(self.name, message)
@@ -153,25 +158,25 @@ class OpcUaROSTopic():
         elif type(message) in (list, tuple) and (len(message) > 0) and hasattr(message[0], '__slots__'):
 
             for index, slot in enumerate(message):
-                if topic_name + '[%d]' % index in self._nodes:
+                if topic_name + '[%d]' % index in self.nodes:
                     self.update_value(topic_name + '[%d]' % index, slot)
                 else:
-                    base_type_str, _ = self._extract_array_info(self._nodes[topic_name].text(self._column_index['type']))
-                    self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index, base_type_str, slot)
+                    base_type_str, _ = self._extract_array_info(self.nodes[topic_name].text(self._column_index['type']))
+                    self._recursive_create_items(self.nodes[topic_name], topic_name + '[%d]' % index, base_type_str, slot)
             # remove obsolete children
-            if len(message) < len(self._nodes[topic_name].get_children()):
-                for i in range(len(message), self._nodes[topic_name].childCount()):
+            if len(message) < len(self.nodes[topic_name].get_children()):
+                for i in range(len(message), self.nodes[topic_name].childCount()):
                     item_topic_name = topic_name + '[%d]' % i
-                    self._recursive_delete_items(self._nodes[item_topic_name])
+                    self._recursive_delete_items(self.nodes[item_topic_name])
         else:
-            if topic_name in self._nodes:
-                self._nodes[topic_name].set_value(repr(message))
+            if topic_name in self.nodes:
+                self.nodes[topic_name].set_value(repr(message))
 
     @opcua.uamethod
     def opcua_update_callback(self, parent):
-        print(self.message_instance)
         self._publisher.publish(self.message_instance)
-        return
+        print self.nodes
+        print self._subscribers
 
     def _recursive_delete_widget_items(self, item):
         def _recursive_remove_items_from_tree(item):
@@ -232,4 +237,16 @@ def main(args):
 
 
 if __name__ == "__main__":
+    # optional: setup logging
+    logging.basicConfig(level=logging.INFO)
+    #logger = logging.getLogger("opcua.address_space")
+    # logger.setLevel(logging.DEBUG)
+    #logger = logging.getLogger("opcua.internal_server")
+    #logger.setLevel(logging.DEBUG)
+    #logger = logging.getLogger("opcua.binary_server_asyncio")
+    # logger.setLevel(logging.DEBUG)
+    #logger = logging.getLogger("opcua.uaprocessor")
+    # logger.setLevel(logging.DEBUG)
+    #logger = logging.getLogger("opcua.subscription_service")
+    # logger.setLevel(logging.DEBUG)
     main(sys.argv)
