@@ -24,11 +24,10 @@ class SubHandler(object):
 
 
 def main(args):
-    client = Client("opc.tcp://141.3.80.67:51200")
+    client = Client("opc.tcp://localhost:21554")
     client.connect()
-
     root = client.get_root_node()
-
+    print(client.get_namespace_array())
     #getting a variable by path and setting its value attribute
     myvar = client.get_node("ns=2;s=3001.Call")
     print(myvar.get_value())
