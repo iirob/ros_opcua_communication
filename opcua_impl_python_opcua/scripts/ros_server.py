@@ -8,7 +8,8 @@ from PyQt4 import Qt
 import roslib
 import roslib.message
 import rospy
-from opcua import ua, Server
+from opcua import ua, Server, uamethod
+from turtlesim.msg import Color
 
 global server
 
@@ -34,6 +35,7 @@ class OpcUaROSTopic:
         self._recursive_create_items(parent, idx, topic_name, topic_type, self.message_instance)
 
         self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
+        self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=5)
 
     def _recursive_create_items(self, parent, idx, topic_name, type_name, message, top_level=False):
         topic_text = topic_name.split('/')[-1]
@@ -64,55 +66,75 @@ class OpcUaROSTopic:
                 base_instance = None
 
             if array_size is not None and hasattr(base_instance, '__slots__'):
-                complex_type = True
                 for index in range(array_size):
                     self._recursive_create_items(parent, idx, topic_name + '[%d]' % index, base_type_str, base_instance)
             else:
                 new_node = _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size)
 
-        # noinspection PyUnboundLocalVariable
         self._nodes[topic_name] = new_node
-
         return
 
     def message_callback(self, message):
-
         self.update_value(self.name, message)
 
     def update_value(self, topic_name, message):
+        if topic_name == "/turtle1/color_sensor":
+            if type(message) == Color:
+                b = message.b
+                g = message.g
+                r = message.r
+                print(b)
+                self._nodes[topic_name + "/b"] = b
+                rospy.set_param(rospy.search_param("/background_b"), b)
+                self._nodes[topic_name + "/g"] = g
+                rospy.set_param(rospy.search_param("/background_g"), g)
+                self._nodes[topic_name + "/r"] = r
+                rospy.set_param(rospy.search_param("/background_r"), r)
+                self._publisher.publish(message)
 
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             for slot_name in message.__slots__:
                 self.update_value(topic_name + '/' + slot_name, getattr(message, slot_name))
 
-        elif type(message) in (list, tuple) and (len(message) > 0) and hasattr(message[0], '__slots__'):
-
-            for index, slot in enumerate(message):
-                if topic_name + '[%d]' % index in self._nodes:
-                    self.update_value(topic_name + '[%d]' % index, slot)
-                else:
-                    base_type_str, _ = _extract_array_info(
-                        self._nodes[topic_name].text(self._column_index['type']))
-                    self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index, base_type_str,
-                                                 slot, None)
+        if type(message) in (list, tuple):
+            if (len(message) > 0) and hasattr(message[0], '__slots__'):
+                print("message received")
+                for index, slot in enumerate(message):
+                    if topic_name + '[%d]' % index in self._nodes:
+                        self.update_value(topic_name + '[%d]' % index, slot)
+                    else:
+                        base_type_str, _ = _extract_array_info(
+                            self._nodes[topic_name].text(self._column_index['type']))
+                        self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
+                                                     base_type_str,
+                                                     slot, None)
             # remove obsolete children
             if len(message) < len(self._nodes[topic_name].get_children()):
                 for i in range(len(message), self._nodes[topic_name].childCount()):
                     item_topic_name = topic_name + '[%d]' % i
                     self._recursive_delete_items(self._nodes[item_topic_name])
-        else:
-            if topic_name in self._nodes:
-                self._nodes[topic_name].set_value(repr(message))
+            else:
+                topic_name = repr(message).replace(":*", "", 1) + topic_name
+                print(topic_name)
+                if topic_name in self._nodes and self._nodes[topic_name] is not None:
+                    self._nodes[topic_name].set_value(repr(message))
 
-    def _recursive_delete_widget_items(self, item):
-        def _recursive_remove_items_from_tree(itemintree):
-            for index in reversed(range(itemintree.childCount())):
-                _recursive_remove_items_from_tree(itemintree.child(index))
-            topic_name = itemintree.data(0, Qt.UserRole)
-            del self._tree_items[topic_name]
 
-        _recursive_remove_items_from_tree(item)
-        item.parent().removeChild(item)
+def _recursive_delete_widget_items(self, item):
+    def _recursive_remove_items_from_tree(itemintree):
+        for index in reversed(range(itemintree.childCount())):
+            _recursive_remove_items_from_tree(itemintree.child(index))
+        topic_name = itemintree.data(0, Qt.UserRole)
+        del self._tree_items[topic_name]
+
+    _recursive_remove_items_from_tree(item)
+    item.parent().removeChild(item)
+
+
+@uamethod
+def opcua_update_callback(self, parent):
+    self._publisher.publish(self.message_instance)
+    print self._nodes
 
 
 def _extract_array_info(type_str):
@@ -129,9 +151,6 @@ def _extract_array_info(type_str):
 
 
 def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size):
-    node = None
-    dv = None
-
     if '[' in type_name:
         type_name = type_name[:type_name.index('[')]
 
@@ -180,6 +199,9 @@ def shutdown():
 
 
 def main(args):
+    global server
+
+    rospy.wait_for_service("/turtle1/teleport_absolute")
     rospy.init_node("opcua_server")
 
     server = Server()
@@ -196,6 +218,7 @@ def main(args):
         # get Objects node, this is where we should put our custom stuff
         objects = server.get_objects_node()
         # Add a variable
+
         myvar = objects.add_variable(idx, "myvar", 10)
         myvar.set_writable()
 
@@ -207,8 +230,14 @@ def main(args):
         ros_topics = rospy.get_published_topics()
 
         for topic_name, topic_type in ros_topics:
-            OpcUaROSTopic(topics, idx, topic_name, topic_type)
-
+            topic = OpcUaROSTopic(topics, idx, topic_name, topic_type)
+            print(topic.name)
+        color_node = server.get_node("ns=2;s=/turtle1/color_sensor/b")
+        color_node.set_writable(True)
+        color_node = server.get_node("ns=2;s=/turtle1/color_sensor/g")
+        color_node.set_writable(True)
+        color_node = server.get_node("ns=2;s=/turtle1/color_sensor/r")
+        color_node.set_writable(True)
         rospy.spin()
 
     except rospy.ROSInterruptException:
