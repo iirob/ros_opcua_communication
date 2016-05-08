@@ -27,17 +27,17 @@ def main(args):
     client = Client("opc.tcp://localhost:21554")
     client.connect()
     root = client.get_root_node()
-    print(client.get_namespace_array())
+    print(root.get_children())
     #getting a variable by path and setting its value attribute
-    myvar = client.get_node("ns=2;s=3001.Call")
-    print(myvar.get_value())
-    datavalue = ua.DataValue(ua.Variant('Bok', ua.VariantType.String))
-    datavalue.SourceTimestamp = 0
-    datavalue.ServerTimestamp = 0
+    myvar = client.get_node(ua.NodeId(2001, 2))
+    print(myvar)
+    datavalue = ua.Variant('Bok', ua.VariantType.String)
+    #datavalue.SourceTimestamp = 0
+    #datavalue.ServerTimestamp = 0
     myvar.set_value(datavalue)
 
-    mode = client.get_node("ns=2;s=3001.Mode")
-    mode.set_value(32, ua.VariantType.Int32)
+   # mode = client.get_node("ns=2;s=3001.Mode")
+   # mode.set_value(32, ua.VariantType.Int32)
 
     #subscribing to data change event to our variable
     handler = SubHandler()
