@@ -9,7 +9,6 @@ import roslib
 import roslib.message
 import rospy
 from opcua import ua, Server, uamethod
-from turtlesim.msg import Color
 
 global server
 
@@ -32,10 +31,10 @@ class OpcUaROSTopic:
             self.message_class = None
             rospy.logfatal("There is not found message type class " + topic_type)
 
-        self._recursive_create_items(parent, idx, topic_name, topic_type, self.message_instance)
+        self._recursive_create_items(parent, idx, topic_name, topic_type, self.message_instance, True)
 
         self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
-        self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=5)
+        self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=1)
 
     def _recursive_create_items(self, parent, idx, topic_name, type_name, message, top_level=False):
         topic_text = topic_name.split('/')[-1]
@@ -70,33 +69,25 @@ class OpcUaROSTopic:
                     self._recursive_create_items(parent, idx, topic_name + '[%d]' % index, base_type_str, base_instance)
             else:
                 new_node = _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size)
-
         self._nodes[topic_name] = new_node
+        if self._nodes[topic_name].get_node_class() == ua.NodeClass.Variable:
+            self._nodes[topic_name].set_writable(True)
         return
 
     def message_callback(self, message):
         self.update_value(self.name, message)
 
-    def update_value(self, topic_name, message):
-        if topic_name == "/turtle1/color_sensor":
-            if type(message) == Color:
-                b = message.b
-                g = message.g
-                r = message.r
-                print(b)
-                self._nodes[topic_name + "/b"] = b
-                rospy.set_param(rospy.search_param("/background_b"), b)
-                self._nodes[topic_name + "/g"] = g
-                rospy.set_param(rospy.search_param("/background_g"), g)
-                self._nodes[topic_name + "/r"] = r
-                rospy.set_param(rospy.search_param("/background_r"), r)
-                self._publisher.publish(message)
+    @uamethod
+    def opcua_update_callback(self, parent):
+        self._publisher.publish(self.message_instance)
+        print self._nodes
 
+    def update_value(self, topic_name, message):
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             for slot_name in message.__slots__:
                 self.update_value(topic_name + '/' + slot_name, getattr(message, slot_name))
 
-        if type(message) in (list, tuple):
+        elif type(message) in (list, tuple):
             if (len(message) > 0) and hasattr(message[0], '__slots__'):
                 print("message received")
                 for index, slot in enumerate(message):
@@ -129,12 +120,6 @@ def _recursive_delete_widget_items(self, item):
 
     _recursive_remove_items_from_tree(item)
     item.parent().removeChild(item)
-
-
-@uamethod
-def opcua_update_callback(self, parent):
-    self._publisher.publish(self.message_instance)
-    print self._nodes
 
 
 def _extract_array_info(type_str):
@@ -201,7 +186,6 @@ def shutdown():
 def main(args):
     global server
 
-    rospy.wait_for_service("/turtle1/teleport_absolute")
     rospy.init_node("opcua_server")
 
     server = Server()
@@ -232,12 +216,6 @@ def main(args):
         for topic_name, topic_type in ros_topics:
             topic = OpcUaROSTopic(topics, idx, topic_name, topic_type)
             print(topic.name)
-        color_node = server.get_node("ns=2;s=/turtle1/color_sensor/b")
-        color_node.set_writable(True)
-        color_node = server.get_node("ns=2;s=/turtle1/color_sensor/g")
-        color_node.set_writable(True)
-        color_node = server.get_node("ns=2;s=/turtle1/color_sensor/r")
-        color_node.set_writable(True)
         rospy.spin()
 
     except rospy.ROSInterruptException:
