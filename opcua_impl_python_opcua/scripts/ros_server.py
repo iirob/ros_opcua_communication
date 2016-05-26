@@ -3,7 +3,7 @@
 # Thanks to:
 # https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_topic/src/rqt_topic/topic_widget.py
 import sys
-from PyQt4 import Qt
+import time
 
 import roslib
 import roslib.message
@@ -11,6 +11,7 @@ import rospy
 from opcua import ua, Server, uamethod
 
 global server
+global dict
 
 
 class OpcUaROSTopic:
@@ -70,7 +71,7 @@ class OpcUaROSTopic:
             else:
                 new_node = _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size)
         self._nodes[topic_name] = new_node
-        if self._nodes[topic_name].get_node_class() == ua.NodeClass.Variable:
+        if self._nodes[topic_name] is not None and self._nodes[topic_name].get_node_class() == ua.NodeClass.Variable:
             self._nodes[topic_name].set_writable(True)
         return
 
@@ -80,7 +81,7 @@ class OpcUaROSTopic:
     @uamethod
     def opcua_update_callback(self, parent):
         self._publisher.publish(self.message_instance)
-        print self._nodes
+        # print self._nodes
 
     def update_value(self, topic_name, message):
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
@@ -89,7 +90,6 @@ class OpcUaROSTopic:
 
         elif type(message) in (list, tuple):
             if (len(message) > 0) and hasattr(message[0], '__slots__'):
-                print("message received")
                 for index, slot in enumerate(message):
                     if topic_name + '[%d]' % index in self._nodes:
                         self.update_value(topic_name + '[%d]' % index, slot)
@@ -104,22 +104,15 @@ class OpcUaROSTopic:
                 for i in range(len(message), self._nodes[topic_name].childCount()):
                     item_topic_name = topic_name + '[%d]' % i
                     self._recursive_delete_items(self._nodes[item_topic_name])
-            else:
-                topic_name = repr(message).replace(":*", "", 1) + topic_name
-                print(topic_name)
-                if topic_name in self._nodes and self._nodes[topic_name] is not None:
-                    self._nodes[topic_name].set_value(repr(message))
+                    del self._nodes[item_topic_name]
+        else:
+            if topic_name in self._nodes and self._nodes[topic_name] is not None:
+                self._nodes[topic_name].set_value(repr(message))
 
-
-def _recursive_delete_widget_items(self, item):
-    def _recursive_remove_items_from_tree(itemintree):
-        for index in reversed(range(itemintree.childCount())):
-            _recursive_remove_items_from_tree(itemintree.child(index))
-        topic_name = itemintree.data(0, Qt.UserRole)
-        del self._tree_items[topic_name]
-
-    _recursive_remove_items_from_tree(item)
-    item.parent().removeChild(item)
+    def _recursive_delete_items(self, item):
+        for child in item.get_children():
+            self._recursive_delete_items(child)
+            del child
 
 
 def _extract_array_info(type_str):
@@ -159,7 +152,7 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
         dv = ua.Variant(0, ua.VariantType.Int64)
     elif type_name == 'uint64':
         dv = ua.Variant(0, ua.VariantType.UInt64)
-    elif type_name == 'float':
+    elif type_name == 'float' or type_name == 'float32':
         dv = ua.Variant(0.0, ua.VariantType.Float)
     elif type_name == 'double':
         dv = ua.Variant(0.0, ua.VariantType.Double)
@@ -183,9 +176,21 @@ def shutdown():
     server.stop()
 
 
+def refresh_topics(idx, topics):
+    global dict
+    ros_topics = rospy.get_published_topics()
+
+    for topic_name, topic_type in ros_topics:
+        if topic_name not in dict or dict[topic_name] is None:
+            topic = OpcUaROSTopic(topics, idx, topic_name, topic_type)
+            dict[topic_name] = topic
+
+
 def main(args):
     global server
+    global dict
 
+    dict = {}
     rospy.init_node("opcua_server")
 
     server = Server()
@@ -198,24 +203,14 @@ def main(args):
         # setup our own namespace, this is expected
         uri = "http://ros.org"
         idx = server.register_namespace(uri)
-
         # get Objects node, this is where we should put our custom stuff
         objects = server.get_objects_node()
-        # Add a variable
-
-        myvar = objects.add_variable(idx, "myvar", 10)
-        myvar.set_writable()
-
-        # TODO: Add refresh method (namespace can be sent as paramter)
 
         topics = objects.add_object(idx, "ROS-Topics")
-        # TODO: Add reading of system state
-
-        ros_topics = rospy.get_published_topics()
-
-        for topic_name, topic_type in ros_topics:
-            topic = OpcUaROSTopic(topics, idx, topic_name, topic_type)
-            print(topic.name)
+        while True:
+            refresh_topics(idx, topics)
+            # Don't clog cpu
+            time.sleep(2)
         rospy.spin()
 
     except rospy.ROSInterruptException:
