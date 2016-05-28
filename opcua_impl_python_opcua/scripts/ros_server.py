@@ -11,7 +11,7 @@ import rospy
 from opcua import ua, Server, uamethod
 
 global server
-global dict
+global topicsDict
 
 
 class OpcUaROSTopic:
@@ -84,6 +84,7 @@ class OpcUaROSTopic:
         # print self._nodes
 
     def update_value(self, topic_name, message):
+        print(message)
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             for slot_name in message.__slots__:
                 self.update_value(topic_name + '/' + slot_name, getattr(message, slot_name))
@@ -177,20 +178,20 @@ def shutdown():
 
 
 def refresh_topics(idx, topics):
-    global dict
+    global topicsDict
     ros_topics = rospy.get_published_topics()
 
     for topic_name, topic_type in ros_topics:
-        if topic_name not in dict or dict[topic_name] is None:
+        if topic_name not in topicsDict or topicsDict[topic_name] is None:
             topic = OpcUaROSTopic(topics, idx, topic_name, topic_type)
-            dict[topic_name] = topic
+            topicsDict[topic_name] = topic
 
 
 def main(args):
     global server
-    global dict
+    global topicsDict
 
-    dict = {}
+    topicsDict = {}
     rospy.init_node("opcua_server")
 
     server = Server()
