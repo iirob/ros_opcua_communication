@@ -21,13 +21,14 @@ class OpcUaROSTopic:
 
         self.type_name = topic_type
         self.name = topic_name
-
         self._nodes = {}
 
         self.message_class = None
         try:
             self.message_class = roslib.message.get_message_class(topic_type)
             self.message_instance = self.message_class()
+            print self.message_instance
+
         except Exception as e:
             self.message_class = None
             rospy.logfatal("There is not found message type class " + topic_type)
@@ -80,11 +81,26 @@ class OpcUaROSTopic:
 
     @uamethod
     def opcua_update_callback(self, parent):
-        self._publisher.publish(self.message_instance)
-        # print self._nodes
+        global server
+        try:
+            print("updating!")
+
+            for nodeName in self._nodes:
+                child = self._nodes[nodeName]
+                name = child.get_browse_name().to_string().replace("*/", "")
+                name = name.replace("2:", "")
+                print(name)
+                if child.get_node_class() == ua.NodeClass.Variable:
+                    setattr(self.message_instance, name, child.get_value())
+                elif child.get_node_class == ua.NodeClass.Object:
+                    setattr(self.message_instance, name, self._create_message_instance(child))
+                print self.message_instance
+            self._publisher.publish(self.message_instance)
+            print (self.message_instance)
+        except Exception as e:
+            print(e)
 
     def update_value(self, topic_name, message):
-        print(message)
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             for slot_name in message.__slots__:
                 self.update_value(topic_name + '/' + slot_name, getattr(message, slot_name))
@@ -114,6 +130,16 @@ class OpcUaROSTopic:
         for child in item.get_children():
             self._recursive_delete_items(child)
             del child
+
+    def _create_message_instance(self, node):
+        for child in node.get_children():
+            name = child.get_browse_name().to_string().replace("*/", "")
+            name = name.replace("*:", "")
+            if child.get_node_class() == ua.NodeClass.Variable:
+                setattr(self.message_instance, name, child.get_value())
+            elif child.get_node_class == ua.NodeClass.Object:
+                setattr(self.message_instance, name, self._create_message_instance(child))
+        return self.message_instance
 
 
 def _extract_array_info(type_str):
@@ -153,7 +179,7 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
         dv = ua.Variant(0, ua.VariantType.Int64)
     elif type_name == 'uint64':
         dv = ua.Variant(0, ua.VariantType.UInt64)
-    elif type_name == 'float' or type_name == 'float32':
+    elif type_name == 'float' or type_name == 'float32' or type_name == 'float64':
         dv = ua.Variant(0.0, ua.VariantType.Float)
     elif type_name == 'double':
         dv = ua.Variant(0.0, ua.VariantType.Double)
