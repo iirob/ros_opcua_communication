@@ -2,13 +2,14 @@
 
 # Thanks to:
 # https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_topic/src/rqt_topic/topic_widget.py
+import numpy
 import sys
 import time
 
 import roslib
 import roslib.message
 import rospy
-from opcua import ua, Server, uamethod
+from opcua import ua, Server, uamethod, common
 
 global server
 global topicsDict
@@ -19,9 +20,11 @@ class OpcUaROSTopic:
 
     def __init__(self, parent, idx, topic_name, topic_type):
 
+        self.parent = parent
         self.type_name = topic_type
         self.name = topic_name
         self._nodes = {}
+        self.idx = idx
 
         self.message_class = None
         try:
@@ -54,9 +57,10 @@ class OpcUaROSTopic:
                 new_node.add_method(ua.NodeId(topic_name + ".Update", parent.nodeid.NamespaceIndex),
                                     ua.QualifiedName("Update", parent.nodeid.NamespaceIndex),
                                     self.opcua_update_callback, [], [])
-            for slot_name, type_name in zip(message.__slots__, message._slot_types):
-                self._recursive_create_items(new_node, idx, topic_name + '/' + slot_name, type_name,
+            for slot_name, type_name_child in zip(message.__slots__, message._slot_types):
+                self._recursive_create_items(new_node, idx, topic_name + '/' + slot_name, type_name_child,
                                              getattr(message, slot_name))
+            self._nodes[topic_name] = new_node
 
         else:
             # This are arrays
@@ -71,7 +75,8 @@ class OpcUaROSTopic:
                     self._recursive_create_items(parent, idx, topic_name + '[%d]' % index, base_type_str, base_instance)
             else:
                 new_node = _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size)
-        self._nodes[topic_name] = new_node
+                self._nodes[topic_name] = new_node
+
         if self._nodes[topic_name] is not None and self._nodes[topic_name].get_node_class() == ua.NodeClass.Variable:
             self._nodes[topic_name].set_writable(True)
         return
@@ -83,24 +88,21 @@ class OpcUaROSTopic:
     def opcua_update_callback(self, parent):
         global server
         try:
-            print("updating!")
-
             for nodeName in self._nodes:
                 child = self._nodes[nodeName]
-                name = child.get_browse_name().to_string().replace("*/", "")
-                name = name.replace("2:", "")
-                print(name)
-                if child.get_node_class() == ua.NodeClass.Variable:
-                    setattr(self.message_instance, name, child.get_value())
-                elif child.get_node_class == ua.NodeClass.Object:
-                    setattr(self.message_instance, name, self._create_message_instance(child))
-                print self.message_instance
+                name = child.get_display_name().Text
+                if hasattr(self.message_instance, name):
+                    if child.get_node_class() == ua.NodeClass.Variable:
+                        setattr(self.message_instance, name,
+                                correct_type(child, type(getattr(self.message_instance, name))))
+                    elif child.get_node_class == ua.NodeClass.Object:
+                        setattr(self.message_instance, name, self.create_message_instance(child))
             self._publisher.publish(self.message_instance)
-            print (self.message_instance)
         except Exception as e:
             print(e)
 
     def update_value(self, topic_name, message):
+        # print(message)
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             for slot_name in message.__slots__:
                 self.update_value(topic_name + '/' + slot_name, getattr(message, slot_name))
@@ -120,26 +122,50 @@ class OpcUaROSTopic:
             if len(message) < len(self._nodes[topic_name].get_children()):
                 for i in range(len(message), self._nodes[topic_name].childCount()):
                     item_topic_name = topic_name + '[%d]' % i
-                    self._recursive_delete_items(self._nodes[item_topic_name])
+                    self.recursive_delete_items(self._nodes[item_topic_name])
                     del self._nodes[item_topic_name]
         else:
             if topic_name in self._nodes and self._nodes[topic_name] is not None:
                 self._nodes[topic_name].set_value(repr(message))
 
-    def _recursive_delete_items(self, item):
+    def recursive_delete_items(self, item):
         for child in item.get_children():
-            self._recursive_delete_items(child)
+            self.recursive_delete_items(child)
             del child
+            if child in self._nodes:
+                del self._nodes[item]
+            common.manage_nodes.delete_nodes(server, [child])
+        common.manage_nodes.delete_nodes(server, [item])
 
-    def _create_message_instance(self, node):
+    def create_message_instance(self, node):
         for child in node.get_children():
-            name = child.get_browse_name().to_string().replace("*/", "")
-            name = name.replace("*:", "")
-            if child.get_node_class() == ua.NodeClass.Variable:
-                setattr(self.message_instance, name, child.get_value())
-            elif child.get_node_class == ua.NodeClass.Object:
-                setattr(self.message_instance, name, self._create_message_instance(child))
+            name = child.get_display_name().Text
+            if hasattr(self.message_instance, name):
+                if child.get_node_class() == ua.NodeClass.Variable:
+                    setattr(self.message_instance, name,
+                            correct_type(child, type(getattr(self.message_instance, name))))
+                elif child.get_node_class == ua.NodeClass.Object:
+                    setattr(self.message_instance, name, self.create_message_instance(child))
         return self.message_instance
+
+
+# Converts the value of the node to that specified in the ros message we are trying to fill. Casts python ints
+# to unsigned integers as to fullfill ros specification. Currently only uses a few different types,
+# no other types encountered so far.
+def correct_type(node, typemessage):
+    data_value = node.get_data_value()
+    result = node.get_value()
+    if isinstance(data_value, ua.DataValue):
+        if typemessage.__name__ == "float":
+            result = numpy.float(result)
+        if typemessage.__name__ == "double":
+            result = numpy.double(result)
+        if typemessage.__name__ == "int":
+            result = int(result) & 0xff
+    else:
+        print (node.get_data_value.Value)
+        return None
+    return result
 
 
 def _extract_array_info(type_str):
@@ -205,12 +231,20 @@ def shutdown():
 
 def refresh_topics(idx, topics):
     global topicsDict
+    global server
+
     ros_topics = rospy.get_published_topics()
 
     for topic_name, topic_type in ros_topics:
         if topic_name not in topicsDict or topicsDict[topic_name] is None:
             topic = OpcUaROSTopic(topics, idx, topic_name, topic_type)
             topicsDict[topic_name] = topic
+
+    for topic_nameOPC in topicsDict:
+        if topic_nameOPC not in ros_topics or ros_topics[topic_nameOPC] is None:
+            ua.NodeId()
+            topicsDict[topic_name].recursive_delete_items(server.get_node(ua.NodeId(topic_name, idx)))
+            del topicsDict[topic_name]
 
 
 def main(args):
