@@ -9,7 +9,7 @@ import time
 import roslib
 import roslib.message
 import rospy
-from opcua import ua, Server, uamethod, common
+from opcua import ua, Server, uamethod
 
 global server
 global topicsDict
@@ -30,7 +30,6 @@ class OpcUaROSTopic:
         try:
             self.message_class = roslib.message.get_message_class(topic_type)
             self.message_instance = self.message_class()
-            print self.message_instance
 
         except Exception as e:
             self.message_class = None
@@ -102,7 +101,6 @@ class OpcUaROSTopic:
             print(e)
 
     def update_value(self, topic_name, message):
-        # print(message)
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             for slot_name in message.__slots__:
                 self.update_value(topic_name + '/' + slot_name, getattr(message, slot_name))
@@ -131,11 +129,10 @@ class OpcUaROSTopic:
     def recursive_delete_items(self, item):
         for child in item.get_children():
             self.recursive_delete_items(child)
-            del child
             if child in self._nodes:
-                del self._nodes[item]
-            common.manage_nodes.delete_nodes(server, [child])
-        common.manage_nodes.delete_nodes(server, [item])
+                del self._nodes[child]
+            server.delete_nodes([child])
+        server.delete_nodes([item])
 
     def create_message_instance(self, node):
         for child in node.get_children():
@@ -241,10 +238,13 @@ def refresh_topics(idx, topics):
             topicsDict[topic_name] = topic
 
     for topic_nameOPC in topicsDict:
-        if topic_nameOPC not in ros_topics or ros_topics[topic_nameOPC] is None:
-            ua.NodeId()
-            topicsDict[topic_name].recursive_delete_items(server.get_node(ua.NodeId(topic_name, idx)))
-            del topicsDict[topic_name]
+        found = False
+        for topicROS, topic_rostype in ros_topics:
+            if topic_nameOPC == topicROS:
+                found = True
+        if not found:
+            topicsDict[topic_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(topic_nameOPC, idx)))
+            del topicsDict[topic_nameOPC]
 
 
 def main(args):
