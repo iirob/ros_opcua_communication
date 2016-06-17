@@ -2,12 +2,15 @@
 
 # Thanks to:
 # https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_service_caller/src/rqt_service_caller/service_caller_widget.py
+import math
+import random
 import sys
 import time
 
+import genpy
 import rospy
 import rosservice
-from opcua import Server
+from opcua import Server, ua
 
 global server
 global servicesDict
@@ -20,31 +23,110 @@ class OpcUaROSService:
         self.name = service_name
         self._class = service_class
         self.proxy = rospy.ServiceProxy(self.name, self._class)
-        self._nodes = {}
         self.counter = 0
+        self._nodes = {}
         self.expressions = {}
+        self._eval_locals = {}
+        self._eval_locals = {}
 
-    def callService(self, *args):
+        for module in (math, random, time):
+            self._eval_locals.update(module.__dict__)
+        self._eval_locals['genpy'] = genpy
+        del self._eval_locals['__name__']
+        del self._eval_locals['__doc__']
+        parent.add_method(ua.NodeId(self.name, idx), self.name, self.call_service, [], [])
+
+    def call_service(self, *args):
+        print ("reached callback")
         request = self._class._request_class()
-        self.fill_message_slots(request, self.name, self.expression, self.counter)
+        print (request)
+        self.fill_message_slots(request, self.name, self.expressions, self.counter)
+        print (request)
+        try:
+            response = self.proxy.call(request)
+            return response
+        except Exception as e:
+            print(e)
 
-        self.proxy.call(args)
+    def fill_message_slots(self, message, topic_name, expressions, counter):
+        print("Filling message slots!")
+        if not hasattr(message, '__slots__'):
+            return
+        for slot_name in message.__slots__:
+            slot_key = topic_name + '/' + slot_name
+
+            # if no expression exists for this slot_key, continue with it's child slots
+            if slot_key not in expressions:
+                self.fill_message_slots(getattr(message, slot_name), slot_key, expressions, counter)
+                continue
+
+            expression = expressions[slot_key]
+            if len(expression) == 0:
+                continue
+
+            # get slot type
+            slot = getattr(message, slot_name)
+            if hasattr(slot, '_type'):
+                slot_type = slot._type
+            else:
+                slot_type = type(slot)
+
+            self._eval_locals['i'] = counter
+            value = self._evaluate_expression(expression, slot_type)
+            if value is not None:
+                setattr(message, slot_name, value)
+            print(message)
+
+    def _evaluate_expression(self, expression, slot_type):
+        successful_eval = True
+        successful_conversion = True
+
+        try:
+            # try to evaluate expression
+            value = eval(expression, {}, self._eval_locals)
+        except Exception:
+            # just use expression-string as value
+            value = expression
+            successful_eval = False
+
+        try:
+            # try to convert value to right type
+            value = slot_type(value)
+        except Exception:
+            successful_conversion = False
+
+        if successful_conversion:
+            return value
+        elif successful_eval:
+            print ("fill_message_slots(): can not convert expression to slot type: %s -> %s' % (type(value), slot_type)")
+        else:
+            print('fill_message_slots(): failed to evaluate expression: %s' % expression)
+
+        return None
 
 
-def refresh_services(idx, servicesopc):
+def refresh_services(idx, services_object_opc):
     global servicesDict
 
-    services = rosservice.get_service_list()
+    rosservices = rosservice.get_service_list(include_nodes=False)
 
-    for service_name in services:
+    for service_name_ros in rosservices:
         try:
-            if service_name not in servicesDict or servicesDict[service_name] is None:
-                service = OpcUaROSService(servicesopc, idx, service_name,
-                                          rosservice.get_service_class_by_name(service_name))
-                servicesDict[service_name] = service
-                servicesopc.add_method(idx, service_name, service.callService(), )
+            if service_name_ros not in servicesDict or servicesDict[service_name_ros] is None:
+                service = OpcUaROSService(services_object_opc, idx, service_name_ros,
+                                          rosservice.get_service_class_by_name(service_name_ros))
+                servicesDict[service_name_ros] = service
         except (rosservice.ROSServiceException, rosservice.ROSServiceIOException) as e:
             server.stop()
+
+    for service_nameOPC in servicesDict:
+        found = False
+        for rosservice_name in rosservices:
+            if service_nameOPC == rosservice_name:
+                found = True
+        if not found:
+            servicesDict[service_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(service_nameOPC, idx)))
+            del servicesDict[service_nameOPC]
 
 
 def main(args):
@@ -69,6 +151,7 @@ def main(args):
     while True:
         refresh_services(idx, servicesopc)
         time.sleep(2)
+    rospy.spin()
 
 
 if __name__ == "__main__":
