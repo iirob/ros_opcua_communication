@@ -30,27 +30,22 @@ class OpcUaROSService:
         del self._eval_locals['__name__']
         del self._eval_locals['__doc__']
         # Build the Array of inputs
-        inputs = []
         sample_req = self._class._request_class()
-        for slot_name in sample_req.__slots__:
-            slot = getattr(sample_req, slot_name)
-            if hasattr(slot, '_type'):
-                slot_type = slot._type
-            else:
-                slot_type = primitivetovariant(type(slot))
+        sample_resp = self._class._response_class()
+        inputs = getargarray(sample_req)
+        outputs = getargarray(sample_resp)
+        parent.add_method(idx, self.name, self.call_service, inputs, outputs)
 
-            inputs.append(slot_type)
-
-        parent.add_method(ua.NodeId(self.name, idx), self.name, self.call_service, inputs, [])
-
-    def call_service(self, *args):
+    def call_service(self, parent, inputs):
         print ("reached callback")
         request = self._class._request_class()
-        print (request)
-        self.fill_message_slots(request, self.name, self.expressions, self.counter)
+        # print (request)
+        # self.fill_message_slots(request, self.name, self.expressions, self.counter)
         try:
-            response = self.proxy.call(request)
-            return response
+            print("executing ros call")
+            #  response = self.proxy(request)
+            # return response
+            return self._class._response_class()
         except Exception as e:
             print(e)
 
@@ -80,7 +75,7 @@ class OpcUaROSService:
                     if hasattr(slot, '_type'):
                         slot_type = slot._type
                     else:
-                        slot_type = primitivetovariant(type(slot))
+                        slot_type = type(slot)
 
                     self._eval_locals['i'] = counter
                     value = self._evaluate_expression(expression, slot_type)
@@ -128,7 +123,9 @@ class OpcUaROSService:
 
 
 def primitivetovariant(typeofprimitive):
-    if typeofprimitive == bool:
+    if isinstance(typeofprimitive, list):
+        dv = ua.VariantType.Null
+    elif typeofprimitive == bool:
         dv = ua.VariantType.Boolean
     elif typeofprimitive == numpy.byte:
         dv = ua.VariantType.Byte
@@ -141,13 +138,39 @@ def primitivetovariant(typeofprimitive):
     elif typeofprimitive == str:
         dv = ua.VariantType.String
     else:
-        print (typeofprimitive)
-        return None
+        # print (typeofprimitive)
+        return ua.VariantType.ByteString
     return dv
 
 
-def refresh_services(server, servicesDict, idx, services_object_opc):
+def getargarray(sample_req):
+    array = []
+    counter = 0
+    for slot_name in sample_req.__slots__:
+        print ("current slot name: ")
+        print (slot_name)
+        slot = getattr(sample_req, slot_name)
+        print("current slot: ")
+        print (slot)
+        if hasattr(slot, '_type'):
+            slot_type = slot._type
+            slot_desc = slot._description
+            input_arg = ua.Argument()
+            input_arg.Name = "Input Argument " + repr(counter)
+            input_arg.DataType = ua.NodeId(getobjectidfromtype(type))
+            input_arg.ValueRank = -1
+            input_arg.ArrayDimensions = []
+            input_arg.Description = ua.LocalizedText("primitive")
+        else:
+            slot_type = primitivetovariant(type(slot))
+            input_arg = slot_type
+        array.append(input_arg)
+        counter += 1
 
+    return array
+
+
+def refresh_services(server, servicesDict, idx, services_object_opc):
     rosservices = rosservice.get_service_list(include_nodes=False)
 
     for service_name_ros in rosservices:
@@ -158,6 +181,7 @@ def refresh_services(server, servicesDict, idx, services_object_opc):
                 servicesDict[service_name_ros] = service
         except (rosservice.ROSServiceException, rosservice.ROSServiceIOException) as e:
             server.stop()
+            print (e)
 
     rosservices = rosservice.get_service_list(include_nodes=False)
     for service_nameOPC in servicesDict:
@@ -168,6 +192,39 @@ def refresh_services(server, servicesDict, idx, services_object_opc):
         if not found and servicesDict[service_nameOPC] is not None:
             servicesDict[service_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(service_nameOPC, idx)))
             servicesDict[service_nameOPC] = None
+
+
+def getobjectidfromtype(type_name):
+    if type_name == 'bool':
+        dv = ua.ObjectIds.Boolean
+    elif type_name == 'byte':
+        dv = ua.ObjectIds.Byte
+    elif type_name == 'int8':
+        dv = ua.ObjectIds.SByte
+    elif type_name == 'uint8':
+        dv = ua.ObjectIds.Byte
+    elif type_name == 'int16':
+        dv = ua.ObjectIds.Int16
+    elif type_name == 'uint16':
+        dv = ua.ObjectIds.UInt16
+    elif type_name == 'int32':
+        dv = ua.ObjectIds.Int32
+    elif type_name == 'uint32':
+        dv = ua.ObjectIds.UInt32
+    elif type_name == 'int64':
+        dv = ua.ObjectIds.Int64
+    elif type_name == 'uint64':
+        dv = ua.ObjectIds.UInt64
+    elif type_name == 'float' or type_name == 'float32' or type_name == 'float64':
+        dv = ua.ObjectIds.Float
+    elif type_name == 'double':
+        dv = ua.ObjectIds.Double
+    elif type_name == 'string':
+        dv = ua.ObjectIds.String
+    else:
+        # print (type_name)
+        return None
+    return dv
 
 # def main(args):
 #     global server
