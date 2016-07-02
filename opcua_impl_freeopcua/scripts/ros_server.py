@@ -10,8 +10,7 @@ import datetime
 import time
 import sys
 
-import opcua
-
+from opcua import ua, uamethod, Server
 
 class OpcUaROSTopic():
 
@@ -34,15 +33,15 @@ class OpcUaROSTopic():
 
         self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
 
-    def _recursive_create_items(self, parent, idx, topic_name, type_name, message):
+    def _recursive_create_items  self, parent, idx, topic_name, type_name, message):
         topic_text = topic_name.split('/')[-1]
         if '[' in topic_text:
             topic_text = topic_text[topic_text.index('['):]
 
         # This here are 'complex data'
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
-            new_node = parent.add_object(opcua.NodeID(topic_name, parent.get_id().namespace_index), opcua.QualifiedName(parent.get_id().namespace_index,  topic_text))
-            new_node.add_property(opcua.NodeID(topic_name + ".Type", parent.get_id().namespace_index), opcua.QualifiedName(parent.get_id().namespace_index,  "Type"), type_name)
+	    new_node = parent.add_object(idx,  parent.get_browse_name()) 
+            new_node.add_property(idx, parent.get_browse_name(), type_name)
             for slot_name, type_name in zip(message.__slots__, message._slot_types):
                 self._recursive_create_items(new_node, idx, topic_name + '/' + slot_name, type_name, getattr(message, slot_name))
 
@@ -85,40 +84,37 @@ class OpcUaROSTopic():
             type_name = type_name[:type_name.index('[')]
 
         if type_name == 'bool':
-            dv = opcua.Variant(False, opcua.VariantType.BOOLEAN)
-            print dv
-            print dv.type()
+            dv = ua.Variant(False, ua.VariantType.Boolean)
         elif type_name == 'byte':
-            dv = opcua.DataValue(0, opcua.VariantType.BYTE)
+            dv = ua.Variant(0, ua.VariantType.Byte)
         elif type_name == 'int8':
-            dv = opcua.DataValue(0, opcua.VariantType.SBYTE)
+            dv = ua.Variant(0, ua.VariantType.SByte)
         elif type_name == 'uint8':
-            dv = opcua.DataValue(0, opcua.VariantType.BYTE)
+            dv = ua.Variant(0, ua.VariantType.Byte)
         elif type_name == 'int16':
-            dv = opcua.DataValue(0, opcua.VariantType.INT16)
+            dv = ua.Variant(0, ua.VariantType.Int16)
         elif type_name == 'uint16':
-            dv = opcua.DataValue(0, opcua.VariantType.UINT16)
+            dv = ua.Variant(0, ua.VariantType.UInt16)
         elif type_name == 'int32':
-            dv = opcua.DataValue(0, opcua.VariantType.INT32)
+            dv = ua.Variant(0, ua.VariantType.Int32)
         elif type_name == 'uint32':
-            dv = opcua.DataValue(0, opcua.VariantType.UINT32)
-            print dv.value
+            dv = ua.Variant(0, ua.VariantType.UInt32)
         elif type_name == 'int64':
-            dv = opcua.DataValue(0, opcua.VariantType.INT64)
+            dv = ua.Variant(0, ua.VariantType.Int64)
         elif type_name == 'uint64':
-            dv = opcua.DataValue(0, opcua.VariantType.UINT64)
+            dv = ua.Variant(0, ua.VariantType.UInt64)
         elif type_name == 'float':
-            dv = opcua.DataValue(0.0, opcua.VariantType.FLOAT)
+            dv = ua.Variant(0.0, ua.VariantType.Float)
         elif type_name == 'double':
-            dv = opcua.DataValue(0.0, opcua.VariantType.DOUBLE)
+            dv = ua.Variant(0.0, ua.VariantType.Double)
         elif type_name == 'string':
-            dv = opcua.DataValue('', opcua.VariantType.STRING)
+            dv = ua.Variant('', ua.VariantType.String)
         else:
-            print type_name
+            print (type_name)
             return None
 
         if array_size is not None: value=[value for i in range(array_size)]
-        return parent.add_variable(opcua.NodeID(topic_name, parent.get_id().namespace_index), opcua.QualifiedName(parent.get_id().namespace_index,  topic_text), dv.value)
+        return parent.add_variable(idx, parent.get_browse_name(), dv.Value)
 
     def message_callback(self, message):
 
@@ -161,9 +157,9 @@ def main(args):
 
     rospy.init_node("opcua_server")
 
-    server = opcua.Server(False)
-    server.set_endpoint("opc.tcp://localhost:21554/")
-    server.set_server_name("ROS OpcUa Server")
+    server = Server()
+    server.set_endpoint("opc.tcp://0.0.0.0:21554/")
+    server.set_server_name("ROS ua Server")
 
     server.start()
 
@@ -174,7 +170,10 @@ def main(args):
 
         # get Objects node, this is where we should put our custom stuff
         objects = server.get_objects_node()
-
+	#Add a variable
+	myvar = objects.add_variable(idx, "myvar", 10)
+	myvar.set_writable()
+	
         #TODO: Add refresh method (namespace can be sent as paramter)
 
         topics = objects.add_object(idx, "ROS-Topics")
