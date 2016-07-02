@@ -34,9 +34,10 @@ class OpcUaROSService:
         sample_resp = self._class._response_class()
         inputs = getargarray(sample_req)
         outputs = getargarray(sample_resp)
+
         parent.add_method(idx, self.name, self.call_service, [ua.VariantType.Int64], [ua.VariantType.Boolean])
 
-    def call_service(self, variant):
+    def call_service(self, parent, inputs):
         print ("reached callback")
         request = self._class._request_class()
         # print (request)

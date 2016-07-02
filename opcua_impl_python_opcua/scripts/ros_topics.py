@@ -214,12 +214,14 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
                                ua.QualifiedName(topic_text, parent.nodeid.NamespaceIndex), dv.Value)
 
 
+
 def numberofsubscribers(nametolookfor, topicsDict):
     if nametolookfor != "/rosout":
         ret = topicsDict[nametolookfor]._subscriber.get_num_connections()
     else:
         ret = 2
     return ret
+
 
 
 def refresh_topics(server, topicsDict, idx, topics):
@@ -229,6 +231,7 @@ def refresh_topics(server, topicsDict, idx, topics):
         if topic_name not in topicsDict or topicsDict[topic_name] is None:
             topic = OpcUaROSTopic(server, topics, idx, topic_name, topic_type)
             topicsDict[topic_name] = topic
+
         elif numberofsubscribers(topic_name, topicsDict) <= 1:
             topicsDict[topic_name].recursive_delete_items(server.get_node(ua.NodeId(topic_name, idx)))
             del topicsDict[topic_name]
