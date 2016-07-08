@@ -35,18 +35,14 @@ class OpcUaROSService:
         inputs = getargarray(sample_req)
         outputs = getargarray(sample_resp)
 
-        parent.add_method(idx, self.name, self.call_service, [ua.VariantType.Int64], [ua.VariantType.Boolean])
+        parent.add_method(idx, self.name, self.call_service, inputs, outputs)
 
-    def call_service(self, parent, inputs):
-        print ("reached callback")
-        request = self._class._request_class()
-        # print (request)
-        # self.fill_message_slots(request, self.name, self.expressions, self.counter)
+    def call_service(self, parent, *inputs):
         try:
-            print("executing ros call")
-            #  response = self.proxy(request)
-            # return response
-            return[ua.Variant(True, ua.VariantType.Boolean)]
+            arguments = map(lambda oneinput: oneinput.Value, inputs)
+            response = self.proxy(*arguments)
+            if response is not None:
+                return response
         except Exception as e:
             print(e)
 
@@ -115,6 +111,7 @@ class OpcUaROSService:
         return None
 
     def recursive_delete_items(self, item):
+        self.proxy.close()
         for child in item.get_children():
             self.recursive_delete_items(child)
             if child in self._nodes:
@@ -147,52 +144,55 @@ def primitivetovariant(typeofprimitive):
 def getargarray(sample_req):
     array = []
     counter = 0
+    print (sample_req)
     for slot_name in sample_req.__slots__:
-        print ("current slot name: ")
-        print (slot_name)
         slot = getattr(sample_req, slot_name)
-        print("current slot: ")
-        print (slot)
+        print(slot)
         if hasattr(slot, '_type'):
             slot_type = slot._type
             slot_desc = slot._description
             input_arg = ua.Argument()
             input_arg.Name = "Input Argument " + repr(counter)
-            input_arg.DataType = ua.NodeId(getobjectidfromtype(type))
+            input_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
             input_arg.ValueRank = -1
             input_arg.ArrayDimensions = []
-            input_arg.Description = ua.LocalizedText("primitive")
+            input_arg.Description = ua.LocalizedText(slot_desc)
         else:
             slot_type = primitivetovariant(type(slot))
+            input_arg = ua.Argument()
+
             input_arg = slot_type
+            # input_arg.Name = slot_name
         array.append(input_arg)
         counter += 1
 
     return array
 
 
-def refresh_services(server, servicesDict, idx, services_object_opc):
-    rosservices = rosservice.get_service_list(include_nodes=False)
+def refresh_services(server, servicesdict, idx, services_object_opc):
+    rosservices = rosservice.get_service_list()
 
     for service_name_ros in rosservices:
         try:
-            if service_name_ros not in servicesDict or servicesDict[service_name_ros] is None:
+            if service_name_ros not in servicesdict or servicesdict[service_name_ros] is None:
                 service = OpcUaROSService(server, services_object_opc, idx, service_name_ros,
                                           rosservice.get_service_class_by_name(service_name_ros))
-                servicesDict[service_name_ros] = service
+                servicesdict[service_name_ros] = service
         except (rosservice.ROSServiceException, rosservice.ROSServiceIOException) as e:
             server.stop()
             print (e)
-
-    rosservices = rosservice.get_service_list(include_nodes=False)
-    for service_nameOPC in servicesDict:
+    tobedeleted = []
+    rosservices = rosservice.get_service_list()
+    for service_nameOPC in servicesdict:
         found = False
         for rosservice_name in rosservices:
             if service_nameOPC == rosservice_name:
                 found = True
-        if not found and servicesDict[service_nameOPC] is not None:
-            servicesDict[service_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(service_nameOPC, idx)))
-            servicesDict[service_nameOPC] = None
+        if not found and servicesdict[service_nameOPC] is not None:
+            servicesdict[service_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(service_nameOPC, idx)))
+            tobedeleted.append(service_nameOPC)
+    for name in tobedeleted:
+        del servicesdict[name]
 
 
 def getobjectidfromtype(type_name):

@@ -214,7 +214,6 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
                                ua.QualifiedName(topic_text, parent.nodeid.NamespaceIndex), dv.Value)
 
 
-
 def numberofsubscribers(nametolookfor, topicsDict):
     if nametolookfor != "/rosout":
         ret = topicsDict[nametolookfor]._subscriber.get_num_connections()
@@ -223,26 +222,27 @@ def numberofsubscribers(nametolookfor, topicsDict):
     return ret
 
 
-
-def refresh_topics(server, topicsDict, idx, topics):
+def refresh_topics(server, topicsdict, idx, topics):
     ros_topics = rospy.get_published_topics()
 
     for topic_name, topic_type in ros_topics:
-        if topic_name not in topicsDict or topicsDict[topic_name] is None:
+        if topic_name not in topicsdict or topicsdict[topic_name] is None:
             topic = OpcUaROSTopic(server, topics, idx, topic_name, topic_type)
-            topicsDict[topic_name] = topic
+            topicsdict[topic_name] = topic
 
-        elif numberofsubscribers(topic_name, topicsDict) <= 1:
-            topicsDict[topic_name].recursive_delete_items(server.get_node(ua.NodeId(topic_name, idx)))
-            del topicsDict[topic_name]
+        elif numberofsubscribers(topic_name, topicsdict) <= 1:
+            topicsdict[topic_name].recursive_delete_items(server.get_node(ua.NodeId(topic_name, idx)))
+            del topicsdict[topic_name]
 
     ros_topics = rospy.get_published_topics()
-
-    for topic_nameOPC in topicsDict:
+    tobedeleted = []
+    for topic_nameOPC in topicsdict:
         found = False
         for topicROS, topic_type in ros_topics:
             if topic_nameOPC == topicROS:
                 found = True
         if not found:
-            topicsDict[topic_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(topic_nameOPC, idx)))
-            del topicsDict[topic_nameOPC]
+            topicsdict[topic_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(topic_nameOPC, idx)))
+            tobedeleted.append(topic_nameOPC)
+    for name in tobedeleted:
+        del topicsdict[name]

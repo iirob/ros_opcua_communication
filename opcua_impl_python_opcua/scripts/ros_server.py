@@ -42,7 +42,7 @@ def main(args):
             ros_topics.refresh_topics(server, topicsDict, idx, topics)
             ros_services.refresh_services(server, servicesDict, idx, servicesopc)
             # Don't clog cpu
-            time.sleep(2)
+            time.sleep(5)
         rospy.spin()
 
     except rospy.ROSInterruptException:
