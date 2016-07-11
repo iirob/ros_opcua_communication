@@ -10,7 +10,7 @@ import time
 import genpy
 import rospy
 import rosservice
-from opcua import ua
+from opcua import ua, uamethod
 
 
 class OpcUaROSService:
@@ -33,16 +33,19 @@ class OpcUaROSService:
         sample_req = self._class._request_class()
         sample_resp = self._class._response_class()
         inputs = getargarray(sample_req)
-        outputs = getargarray(sample_resp)
+        self.outputs = getargarray(sample_resp)
+        parent.add_method(idx, self.name, self.call_service, inputs, self.outputs)
 
-        parent.add_method(idx, self.name, self.call_service, inputs, outputs)
-
+    @uamethod
     def call_service(self, parent, *inputs):
         try:
-            arguments = map(lambda oneinput: oneinput.Value, inputs)
-            response = self.proxy(*arguments)
-            if response is not None:
-                return response
+            # arguments = map(lambda oneinput: oneinput.Value, inputs)
+            response = self.proxy(*inputs)
+            outputarray = self.filloutputarray(response)
+            if not (outputarray is None or len(outputarray) == 0):
+                return outputarray
+            else:
+                return
         except Exception as e:
             print(e)
 
@@ -119,6 +122,38 @@ class OpcUaROSService:
             self.server.delete_nodes([child])
         self.server.delete_nodes([item])
 
+    def filloutputarray(self, response):
+        outputs = []
+        counter = 0
+        for slot_name in response.__slots__:
+            slot = getattr(response, slot_name)
+            if hasattr(slot, '_type'):
+                slot_type = slot._type
+                slot_desc = slot._description
+                input_arg = ua.Argument()
+                input_arg.Name = "Input Argument " + repr(counter)
+                input_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
+                input_arg.ValueRank = -1
+                input_arg.ArrayDimensions = []
+                input_arg.Description = ua.LocalizedText(slot_desc)
+
+            else:
+                if isinstance(slot, list):
+                    slot_type = primitivetovariant("list")
+                    input_arg = ua.Argument()
+                    input_arg.Name = "Input Argument " + repr(counter)
+                    input_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
+                    input_arg.ValueRank = -1
+                    input_arg.ArrayDimensions = []
+                    input_arg.Description = ua.LocalizedText("Array")
+                else:
+                    slot_type = primitivetovariant(type(slot))
+                    input_arg = slot_type
+            counter += 1
+            if input_arg is not None:
+                outputs.append(input_arg)
+        return outputs
+
 
 def primitivetovariant(typeofprimitive):
     if isinstance(typeofprimitive, list):
@@ -144,10 +179,8 @@ def primitivetovariant(typeofprimitive):
 def getargarray(sample_req):
     array = []
     counter = 0
-    print (sample_req)
     for slot_name in sample_req.__slots__:
         slot = getattr(sample_req, slot_name)
-        print(slot)
         if hasattr(slot, '_type'):
             slot_type = slot._type
             slot_desc = slot._description
@@ -157,12 +190,21 @@ def getargarray(sample_req):
             input_arg.ValueRank = -1
             input_arg.ArrayDimensions = []
             input_arg.Description = ua.LocalizedText(slot_desc)
-        else:
-            slot_type = primitivetovariant(type(slot))
-            input_arg = ua.Argument()
 
-            input_arg = slot_type
-            # input_arg.Name = slot_name
+        else:
+            if isinstance(slot, list):
+                slot_type = primitivetovariant("list")
+                input_arg = ua.Argument()
+                input_arg.Name = "Input Argument " + repr(counter)
+                input_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
+                input_arg.ValueRank = -1
+                input_arg.ArrayDimensions = []
+                input_arg.Description = ua.LocalizedText("Array")
+            else:
+                slot_type = primitivetovariant(type(slot))
+
+                input_arg = slot_type
+                # input_arg.Name = slot_name
         array.append(input_arg)
         counter += 1
 
@@ -192,6 +234,7 @@ def refresh_services(server, servicesdict, idx, services_object_opc):
             servicesdict[service_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(service_nameOPC, idx)))
             tobedeleted.append(service_nameOPC)
     for name in tobedeleted:
+        print ("should be deleted: " + name)
         del servicesdict[name]
 
 
@@ -222,6 +265,8 @@ def getobjectidfromtype(type_name):
         dv = ua.ObjectIds.Double
     elif type_name == 'string':
         dv = ua.ObjectIds.String
+    elif type_name == 'array':
+        dv = ua.ObjectIds.ArrayItemType
     else:
         # print (type_name)
         return None
