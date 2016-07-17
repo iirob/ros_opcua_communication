@@ -10,6 +10,15 @@ import ros_topics
 global server
 
 
+def nextname(hierachy, param):
+    output = ""
+    counter = param + 1
+    while counter < len(hierachy):
+        output += hierachy[counter]
+        counter += 1
+    return output
+
+
 def shutdown():
     global server
 
@@ -31,16 +40,18 @@ def main(args):
 
     try:
         # setup our own namespace, this is expected
-        uri = "http://ros.org"
+        uri = "http://ros.org/topics"
+        uri2 = "http://ros.org/services"
         idx = server.register_namespace(uri)
+        idx_services = server.register_namespace(uri2)
         # get Objects node, this is where we should put our custom stuff
         objects = server.get_objects_node()
 
         topics = objects.add_object(idx, "ROS-Topics")
-        servicesopc = objects.add_object(idx, "ROS-Services")
+        servicesopc = objects.add_object(idx_services, "ROS-Services")
         while True:
             ros_topics.refresh_topics(server, topicsDict, idx, topics)
-            ros_services.refresh_services(server, servicesDict, idx, servicesopc)
+            ros_services.refresh_services(server, servicesDict, idx_services, servicesopc)
             # Don't clog cpu
             time.sleep(5)
         rospy.spin()

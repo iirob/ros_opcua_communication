@@ -12,11 +12,14 @@ import rospy
 import rosservice
 from opcua import ua, uamethod
 
+import ros_server
+
 
 class OpcUaROSService:
     def __init__(self, server, parent, idx, service_name, service_class):
         self.server = server
         self.name = service_name
+        self.parent = self.recursive_create_objects(service_name, idx, parent)
         self._class = service_class
         self.proxy = rospy.ServiceProxy(self.name, self._class)
         self.counter = 0
@@ -34,7 +37,7 @@ class OpcUaROSService:
         sample_resp = self._class._response_class()
         inputs = getargarray(sample_req)
         self.outputs = getargarray(sample_resp)
-        parent.add_method(idx, self.name, self.call_service, inputs, self.outputs)
+        self.method = self.parent.add_method(idx, self.name, self.call_service, inputs, self.outputs)
 
     @uamethod
     def call_service(self, parent, *inputs):
@@ -49,70 +52,6 @@ class OpcUaROSService:
         except Exception as e:
             print(e)
 
-    def fill_message_slots(self, message, topic_name, expressions, counter):
-        try:
-            print("Filling message slots!")
-
-            if not hasattr(message, '__slots__'):
-                print("message has no slots")
-                return
-            else:
-                print(message.__slots__)
-                for slot_name in message.__slots__:
-                    slot_key = topic_name + '/' + slot_name
-                    print ("filling slot " + slot_name)
-                    # if no expression exists for this slot_key, continue with it's child slots
-                    if slot_key not in expressions:
-                        self.fill_message_slots(getattr(message, slot_name), slot_key, expressions, counter)
-                        continue
-
-                    expression = expressions[slot_key]
-                    if len(expression) == 0:
-                        continue
-
-                    # get slot type
-                    slot = getattr(message, slot_name)
-                    if hasattr(slot, '_type'):
-                        slot_type = slot._type
-                    else:
-                        slot_type = type(slot)
-
-                    self._eval_locals['i'] = counter
-                    value = self._evaluate_expression(expression, slot_type)
-                    if value is not None:
-                        setattr(message, slot_name, value)
-                    print(message)
-                print (message)
-        except Exception as e:
-            print(e)
-
-    def _evaluate_expression(self, expression, slot_type):
-        successful_eval = True
-        successful_conversion = True
-
-        try:
-            # try to evaluate expression
-            value = eval(expression, {}, self._eval_locals)
-        except Exception:
-            # just use expression-string as value
-            value = expression
-            successful_eval = False
-
-        try:
-            # try to convert value to right type
-            value = slot_type(value)
-        except Exception:
-            successful_conversion = False
-
-        if successful_conversion:
-            return value
-        elif successful_eval:
-            print ("fill_message_slots(): can not convert expression to slot type: %s -> %s' % (type(value), slot_type)")
-        else:
-            print('fill_message_slots(): failed to evaluate expression: %s' % expression)
-
-        return None
-
     def recursive_delete_items(self, item):
         self.proxy.close()
         for child in item.get_children():
@@ -120,9 +59,10 @@ class OpcUaROSService:
             if child in self._nodes:
                 del self._nodes[child]
             self.server.delete_nodes([child])
-        self.server.delete_nodes([item])
+        self.server.delete_nodes([self.method])
 
     def filloutputarray(self, response):
+        print response
         outputs = []
         counter = 0
         for slot_name in response.__slots__:
@@ -130,29 +70,56 @@ class OpcUaROSService:
             if hasattr(slot, '_type'):
                 slot_type = slot._type
                 slot_desc = slot._description
-                input_arg = ua.Argument()
-                input_arg.Name = "Input Argument " + repr(counter)
-                input_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
-                input_arg.ValueRank = -1
-                input_arg.ArrayDimensions = []
-                input_arg.Description = ua.LocalizedText(slot_desc)
+                output_arg = ua.Argument()
+                output_arg.Name = "Input Argument " + repr(counter)
+                output_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
+                output_arg.ValueRank = -1
+                output_arg.ArrayDimensions = []
+                output_arg.Description = ua.LocalizedText(slot_desc)
 
             else:
                 if isinstance(slot, list):
-                    slot_type = primitivetovariant("list")
-                    input_arg = ua.Argument()
-                    input_arg.Name = "Input Argument " + repr(counter)
-                    input_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
-                    input_arg.ValueRank = -1
-                    input_arg.ArrayDimensions = []
-                    input_arg.Description = ua.LocalizedText("Array")
+                    output_arg = ua.Argument()
+                    output_arg.Name = "Input Argument " + repr(counter)
+                    output_arg.DataType = ua.NodeId(getobjectidfromtype("array"))
+                    output_arg.ValueRank = -1
+                    output_arg.ArrayDimensions = []
+                    output_arg.Description = ua.LocalizedText("Array")
                 else:
-                    slot_type = primitivetovariant(type(slot))
-                    input_arg = slot_type
+                    print("Output Value is a primitive: " + slot_name)
+
+                    output_arg = ua.Argument()
+                    output_arg.Name = slot_name
+                    output_arg.DataType = ua.NodeId(getobjectidfromtype(type(slot)))
+                    output_arg.ValueRank = -1
+                    output_arg.ArrayDimensions = []
+                    output_arg.Description = ua.LocalizedText(slot_name)
             counter += 1
-            if input_arg is not None:
-                outputs.append(input_arg)
+            if output_arg is not None:
+                outputs.append(output_arg.to_binary())
         return outputs
+
+    def recursive_create_objects(self, topic_name, idx, parent):
+        hierachy = topic_name.split('/')
+        if len(hierachy) == 0 or len(hierachy) == 1:
+            return parent
+        for name in hierachy:
+            if name != '':
+                try:
+                    nodewithsamename = self.server.get_node(ua.NodeId(name, idx))
+                    if nodewithsamename is not None and nodewithsamename.get_parent() == parent:
+                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, nodewithsamename)
+                    else:
+                        newparent = parent.add_object(
+                            ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                            ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
+                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
+                except Exception:
+                    newparent = parent.add_object(
+                        ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                        ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
+                    return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
+        return parent
 
 
 def primitivetovariant(typeofprimitive):
@@ -184,28 +151,30 @@ def getargarray(sample_req):
         if hasattr(slot, '_type'):
             slot_type = slot._type
             slot_desc = slot._description
-            input_arg = ua.Argument()
-            input_arg.Name = "Input Argument " + repr(counter)
-            input_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
-            input_arg.ValueRank = -1
-            input_arg.ArrayDimensions = []
-            input_arg.Description = ua.LocalizedText(slot_desc)
+            arg = ua.Argument()
+            arg.Name = slot_name
+            arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
+            arg.ValueRank = -1
+            arg.ArrayDimensions = []
+            arg.Description = ua.LocalizedText(slot_desc)
 
         else:
             if isinstance(slot, list):
                 slot_type = primitivetovariant("list")
-                input_arg = ua.Argument()
-                input_arg.Name = "Input Argument " + repr(counter)
-                input_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
-                input_arg.ValueRank = -1
-                input_arg.ArrayDimensions = []
-                input_arg.Description = ua.LocalizedText("Array")
+                arg = ua.Argument()
+                arg.Name = slot_name
+                arg.DataType = ua.NodeId(getobjectidfromtype("array"))
+                arg.ValueRank = -1
+                arg.ArrayDimensions = []
+                arg.Description = ua.LocalizedText("Array")
             else:
-                slot_type = primitivetovariant(type(slot))
-
-                input_arg = slot_type
-                # input_arg.Name = slot_name
-        array.append(input_arg)
+                arg = ua.Argument()
+                arg.Name = slot_name
+                arg.DataType = ua.NodeId(getobjectidfromtype(type(slot).__name__))
+                arg.ValueRank = -1
+                arg.ArrayDimensions = []
+                arg.Description = ua.LocalizedText(slot_name)
+        array.append(arg)
         counter += 1
 
     return array
@@ -233,8 +202,9 @@ def refresh_services(server, servicesdict, idx, services_object_opc):
         if not found and servicesdict[service_nameOPC] is not None:
             servicesdict[service_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(service_nameOPC, idx)))
             tobedeleted.append(service_nameOPC)
+        if len(servicesdict[service_nameOPC].parent.get_children()) == 0:
+            server.delete_nodes([servicesdict[service_nameOPC].parent])
     for name in tobedeleted:
-        print ("should be deleted: " + name)
         del servicesdict[name]
 
 
@@ -263,7 +233,7 @@ def getobjectidfromtype(type_name):
         dv = ua.ObjectIds.Float
     elif type_name == 'double':
         dv = ua.ObjectIds.Double
-    elif type_name == 'string':
+    elif type_name == 'string' or type_name == 'str':
         dv = ua.ObjectIds.String
     elif type_name == 'array':
         dv = ua.ObjectIds.ArrayItemType
@@ -271,30 +241,3 @@ def getobjectidfromtype(type_name):
         # print (type_name)
         return None
     return dv
-
-# def main(args):
-#     global server
-#
-#     rospy.init_node("opcua_server")
-#     servicesDict = {}
-#     server = Server()
-#     server.set_endpoint("opc.tcp://0.0.0.0:21554/")
-#     server.set_server_name("ROS ua Server")
-#
-#     server.start()  # setup our own namespace, this is expected
-#     uri = "http://ros.org"
-#     idx = server.register_namespace(uri)
-#
-#     # get Objects node, this is where we should put our custom stuff
-#     objects = server.get_objects_node()
-#
-#     servicesopc = objects.add_object(idx, "ROS-Services")
-#
-#     while True:
-#         refresh_services(servicesDict, idx, servicesopc)
-#         time.sleep(2)
-#     rospy.spin()
-#
-#
-# if __name__ == "__main__":
-#     main(sys.argv)

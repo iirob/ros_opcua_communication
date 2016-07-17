@@ -3,17 +3,20 @@
 # Thanks to:
 # https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_topic/src/rqt_topic/topic_widget.py
 import numpy
+import random
 
 import roslib
 import roslib.message
 import rospy
 from opcua import ua, uamethod
 
+import ros_server
+
 
 class OpcUaROSTopic:
     def __init__(self, server, parent, idx, topic_name, topic_type):
         self.server = server
-        self.parent = parent
+        self.parent = self.recursive_create_objects(topic_name, idx, parent)
         self.type_name = topic_type
         self.name = topic_name
         self._nodes = {}
@@ -28,13 +31,15 @@ class OpcUaROSTopic:
             self.message_class = None
             rospy.logfatal("There is not found message type class " + topic_type)
 
-        self._recursive_create_items(parent, idx, topic_name, topic_type, self.message_instance, True)
+        self._recursive_create_items(self.parent, idx, topic_name, topic_type, self.message_instance, True)
 
         self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
         self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=1)
 
     def _recursive_create_items(self, parent, idx, topic_name, type_name, message, top_level=False):
+        hierachy = topic_name.split('/')
         topic_text = topic_name.split('/')[-1]
+        # if hierachy[0] == topic_text:
         if '[' in topic_text:
             topic_text = topic_text[topic_text.index('['):]
 
@@ -42,7 +47,7 @@ class OpcUaROSTopic:
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             complex_type = True
             new_node = parent.add_object(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
-                                         ua.QualifiedName(topic_text, parent.nodeid.NamespaceIndex))
+                                         ua.QualifiedName(topic_name, parent.nodeid.NamespaceIndex))
             new_node.add_property(ua.NodeId(topic_name + ".Type", idx),
                                   ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
             if top_level:
@@ -91,6 +96,7 @@ class OpcUaROSTopic:
             self._publisher.publish(self.message_instance)
         except Exception as e:
             print(e)
+            self.server.delete_nodes([self.parent])
 
     def update_value(self, topic_name, message):
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
@@ -137,10 +143,32 @@ class OpcUaROSTopic:
                             correct_type(child, type(getattr(self.message_instance, name))))
                 elif child.get_node_class == ua.NodeClass.Object:
                     setattr(self.message_instance, name, self.create_message_instance(child))
-        return self.message_instance
+        return self.message_instance  # Converts the value of the node to that specified in the ros message we are trying to fill. Casts python ints
+
+    def recursive_create_objects(self, topic_name, idx, parent):
+        hierachy = topic_name.split('/')
+        if len(hierachy) == 0 or len(hierachy) == 1:
+            return parent
+        for name in hierachy:
+            if name != '':
+                try:
+                    nodewithsamename = self.server.get_node(ua.NodeId(name, idx))
+                    if nodewithsamename is not None and nodewithsamename.get_parent() == parent:
+                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, nodewithsamename)
+                    else:
+                        newparent = parent.add_object(
+                            ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                            ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
+                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
+                except Exception:
+                    newparent = parent.add_object(
+                        ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                        ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
+                    return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
+
+        return parent
 
 
-# Converts the value of the node to that specified in the ros message we are trying to fill. Casts python ints
 # to unsigned integers as to fullfill ros specification. Currently only uses a few different types,
 # no other types encountered so far.
 def correct_type(node, typemessage):
@@ -244,5 +272,11 @@ def refresh_topics(server, topicsdict, idx, topics):
         if not found:
             topicsdict[topic_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(topic_nameOPC, idx)))
             tobedeleted.append(topic_nameOPC)
+        if len(topicsdict[topic_nameOPC].parent.get_children()) <= 1 and "rosout" not in topic_nameOPC:
+            print("deleting")
+            print(topic_nameOPC)
+            server.delete_nodes([topicsdict[topic_nameOPC].parent])
     for name in tobedeleted:
+        print("deleting")
+        print(name)
         del topicsdict[name]
