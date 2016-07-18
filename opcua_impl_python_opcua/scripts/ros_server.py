@@ -7,27 +7,18 @@ from opcua import Server
 import ros_services
 import ros_topics
 
-global server
 
-
-def nextname(hierachy, param):
+# Returns the hierachy as one string from the first remaining part on.
+def nextname(hierachy, index_of_last_processed):
     output = ""
-    counter = param + 1
+    counter = index_of_last_processed + 1
     while counter < len(hierachy):
         output += hierachy[counter]
         counter += 1
     return output
 
 
-def shutdown():
-    global server
-
-    server.stop()
-
-
 def main(args):
-    global server
-
     topicsDict = {}
     servicesDict = {}
     rospy.init_node("opcua_server")
@@ -36,29 +27,24 @@ def main(args):
     server.set_endpoint("opc.tcp://0.0.0.0:21554/")
     server.set_server_name("ROS ua Server")
 
-    server.start()
+    server.start()  # setup our own namespace, this is expected
+    uri_topics = "http://ros.org/topics"
+    uri_services = "http://ros.org/services"
+    idx_topics = server.register_namespace(uri_topics)
+    idx_services = server.register_namespace(uri_services)
+    # get Objects node, this is where we should put our custom stuff
+    objects = server.get_objects_node()
 
-    try:
-        # setup our own namespace, this is expected
-        uri = "http://ros.org/topics"
-        uri2 = "http://ros.org/services"
-        idx = server.register_namespace(uri)
-        idx_services = server.register_namespace(uri2)
-        # get Objects node, this is where we should put our custom stuff
-        objects = server.get_objects_node()
+    topics_object = objects.add_object(idx_topics, "ROS-Topics")
+    services_object = objects.add_object(idx_services, "ROS-Services")
+    while not rospy.is_shutdown():
+        ros_topics.refresh_topics(server, topicsDict, idx_topics, topics_object)
+        ros_services.refresh_services(server, servicesDict, idx_services, services_object)
+        # Don't clog cpu
+        time.sleep(5)
 
-        topics = objects.add_object(idx, "ROS-Topics")
-        servicesopc = objects.add_object(idx_services, "ROS-Services")
-        while True:
-            ros_topics.refresh_topics(server, topicsDict, idx, topics)
-            ros_services.refresh_services(server, servicesDict, idx_services, servicesopc)
-            # Don't clog cpu
-            time.sleep(5)
-        rospy.spin()
-
-    except rospy.ROSInterruptException:
-
-        server.stop()
+    server.stop()
+    quit()
 
 
 if __name__ == "__main__":

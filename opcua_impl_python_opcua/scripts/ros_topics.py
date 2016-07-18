@@ -27,7 +27,7 @@ class OpcUaROSTopic:
             self.message_class = roslib.message.get_message_class(topic_type)
             self.message_instance = self.message_class()
 
-        except Exception as e:
+        except rospy.ROSException:
             self.message_class = None
             rospy.logfatal("There is not found message type class " + topic_type)
 
@@ -37,9 +37,7 @@ class OpcUaROSTopic:
         self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=1)
 
     def _recursive_create_items(self, parent, idx, topic_name, type_name, message, top_level=False):
-        hierachy = topic_name.split('/')
         topic_text = topic_name.split('/')[-1]
-        # if hierachy[0] == topic_text:
         if '[' in topic_text:
             topic_text = topic_text[topic_text.index('['):]
 
@@ -94,7 +92,7 @@ class OpcUaROSTopic:
                     elif child.get_node_class == ua.NodeClass.Object:
                         setattr(self.message_instance, name, self.create_message_instance(child))
             self._publisher.publish(self.message_instance)
-        except Exception as e:
+        except rospy.ROSException as e:
             print(e)
             self.server.delete_nodes([self.parent])
 
@@ -133,6 +131,8 @@ class OpcUaROSTopic:
                 del self._nodes[child]
             self.server.delete_nodes([child])
         self.server.delete_nodes([item])
+        if len(self.parent.get_children()) == 0:
+            self.server.delete_nodes([self.parent])
 
     def create_message_instance(self, node):
         for child in node.get_children():
@@ -156,11 +156,14 @@ class OpcUaROSTopic:
                     if nodewithsamename is not None and nodewithsamename.get_parent() == parent:
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, nodewithsamename)
                     else:
+                        # if for some reason 2 services with exactly same name are created use hack>: add random int, prob to hit two
+                        # same ints 1/10000, should be sufficient
                         newparent = parent.add_object(
                             ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
-                except Exception:
+                # thrown when node with parent name is not existent in server
+                except IndexError:
                     newparent = parent.add_object(
                         ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
@@ -182,7 +185,7 @@ def correct_type(node, typemessage):
         if typemessage.__name__ == "int":
             result = int(result) & 0xff
     else:
-        print (node.get_data_value.Value)
+        print ("can't convert: " + str(node.get_data_value.Value))
         return None
     return result
 
@@ -231,7 +234,7 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
     elif type_name == 'string':
         dv = ua.Variant('', ua.VariantType.String)
     else:
-        print (type_name)
+        print ("can't create node with type" + str(type_name))
         return None
 
     if array_size is not None:
@@ -242,7 +245,9 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
                                ua.QualifiedName(topic_text, parent.nodeid.NamespaceIndex), dv.Value)
 
 
+# Used to delete obsolete topics
 def numberofsubscribers(nametolookfor, topicsDict):
+    # rosout only has one subscriber/publisher at all times, so ignore.
     if nametolookfor != "/rosout":
         ret = topicsDict[nametolookfor]._subscriber.get_num_connections()
     else:
@@ -263,6 +268,7 @@ def refresh_topics(server, topicsdict, idx, topics):
             del topicsdict[topic_name]
 
     ros_topics = rospy.get_published_topics()
+    # use to not get dict changed during iteration errors
     tobedeleted = []
     for topic_nameOPC in topicsdict:
         found = False
@@ -272,11 +278,8 @@ def refresh_topics(server, topicsdict, idx, topics):
         if not found:
             topicsdict[topic_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(topic_nameOPC, idx)))
             tobedeleted.append(topic_nameOPC)
+        # this doesn't seem to be working, but parent is removed in recursive delete function
         if len(topicsdict[topic_nameOPC].parent.get_children()) <= 1 and "rosout" not in topic_nameOPC:
-            print("deleting")
-            print(topic_nameOPC)
             server.delete_nodes([topicsdict[topic_nameOPC].parent])
     for name in tobedeleted:
-        print("deleting")
-        print(name)
         del topicsdict[name]

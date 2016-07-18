@@ -10,9 +10,48 @@ import time
 import genpy
 import rospy
 import rosservice
-from opcua import ua, uamethod
+from opcua import ua, uamethod, common
 
 import ros_server
+
+
+def filloutputarray(response):
+    print response
+    outputs = []
+    counter = 0
+    for slot_name in response.__slots__:
+        slot = getattr(response, slot_name)
+        if hasattr(slot, '_type'):
+            slot_type = slot._type
+            slot_desc = slot._description
+            output_arg = ua.Argument()
+            output_arg.Name = "Input Argument " + repr(counter)
+            output_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
+            output_arg.ValueRank = -1
+            output_arg.ArrayDimensions = []
+            output_arg.Description = ua.LocalizedText(slot_desc)
+
+        else:
+            if isinstance(slot, list):
+                output_arg = ua.Argument()
+                output_arg.Name = "Input Argument " + repr(counter)
+                output_arg.DataType = ua.NodeId(getobjectidfromtype("array"))
+                output_arg.ValueRank = -1
+                output_arg.ArrayDimensions = []
+                output_arg.Description = ua.LocalizedText("Array")
+            else:
+                print("Output Value is a primitive: " + slot_name)
+
+                output_arg = ua.Argument()
+                output_arg.Name = slot_name
+                output_arg.DataType = ua.NodeId(getobjectidfromtype(type(slot)))
+                output_arg.ValueRank = -1
+                output_arg.ArrayDimensions = []
+                output_arg.Description = ua.LocalizedText(slot_name)
+        counter += 1
+        if output_arg is not None:
+            outputs.append(output_arg.to_binary())
+    return outputs
 
 
 class OpcUaROSService:
@@ -42,14 +81,13 @@ class OpcUaROSService:
     @uamethod
     def call_service(self, parent, *inputs):
         try:
-            # arguments = map(lambda oneinput: oneinput.Value, inputs)
             response = self.proxy(*inputs)
-            outputarray = self.filloutputarray(response)
+            outputarray = filloutputarray(response)
             if not (outputarray is None or len(outputarray) == 0):
                 return outputarray
             else:
                 return
-        except Exception as e:
+        except (rospy.ROSException, common.uaerrors.UaError) as e:
             print(e)
 
     def recursive_delete_items(self, item):
@@ -60,44 +98,6 @@ class OpcUaROSService:
                 del self._nodes[child]
             self.server.delete_nodes([child])
         self.server.delete_nodes([self.method])
-
-    def filloutputarray(self, response):
-        print response
-        outputs = []
-        counter = 0
-        for slot_name in response.__slots__:
-            slot = getattr(response, slot_name)
-            if hasattr(slot, '_type'):
-                slot_type = slot._type
-                slot_desc = slot._description
-                output_arg = ua.Argument()
-                output_arg.Name = "Input Argument " + repr(counter)
-                output_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
-                output_arg.ValueRank = -1
-                output_arg.ArrayDimensions = []
-                output_arg.Description = ua.LocalizedText(slot_desc)
-
-            else:
-                if isinstance(slot, list):
-                    output_arg = ua.Argument()
-                    output_arg.Name = "Input Argument " + repr(counter)
-                    output_arg.DataType = ua.NodeId(getobjectidfromtype("array"))
-                    output_arg.ValueRank = -1
-                    output_arg.ArrayDimensions = []
-                    output_arg.Description = ua.LocalizedText("Array")
-                else:
-                    print("Output Value is a primitive: " + slot_name)
-
-                    output_arg = ua.Argument()
-                    output_arg.Name = slot_name
-                    output_arg.DataType = ua.NodeId(getobjectidfromtype(type(slot)))
-                    output_arg.ValueRank = -1
-                    output_arg.ArrayDimensions = []
-                    output_arg.Description = ua.LocalizedText(slot_name)
-            counter += 1
-            if output_arg is not None:
-                outputs.append(output_arg.to_binary())
-        return outputs
 
     def recursive_create_objects(self, topic_name, idx, parent):
         hierachy = topic_name.split('/')
@@ -114,7 +114,7 @@ class OpcUaROSService:
                             ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
-                except Exception:
+                except IndexError, common.uaerrors.UaError:
                     newparent = parent.add_object(
                         ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
@@ -138,7 +138,7 @@ def primitivetovariant(typeofprimitive):
     elif typeofprimitive == str:
         dv = ua.VariantType.String
     else:
-        # print (typeofprimitive)
+        print ("This type couldn't be mapped" + str(typeofprimitive))
         return ua.VariantType.ByteString
     return dv
 
@@ -160,7 +160,6 @@ def getargarray(sample_req):
 
         else:
             if isinstance(slot, list):
-                slot_type = primitivetovariant("list")
                 arg = ua.Argument()
                 arg.Name = slot_name
                 arg.DataType = ua.NodeId(getobjectidfromtype("array"))
@@ -192,6 +191,8 @@ def refresh_services(server, servicesdict, idx, services_object_opc):
         except (rosservice.ROSServiceException, rosservice.ROSServiceIOException) as e:
             server.stop()
             print (e)
+            quit()
+    # use extra iteration as to not get "dict changed during iteration" errors
     tobedeleted = []
     rosservices = rosservice.get_service_list()
     for service_nameOPC in servicesdict:
