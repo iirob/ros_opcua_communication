@@ -27,8 +27,10 @@ def main(args):
     server.set_endpoint("opc.tcp://0.0.0.0:21554/")
     server.set_server_name("ROS ua Server")
 
-    server.start()  # setup our own namespace, this is expected
+    server.start()
+    # setup our own namespaces, this is expected
     uri_topics = "http://ros.org/topics"
+    # two different namespaces to make getting the correct node easier for get_node (otherwise had object for service and topic with same name
     uri_services = "http://ros.org/services"
     idx_topics = server.register_namespace(uri_topics)
     idx_services = server.register_namespace(uri_services)
