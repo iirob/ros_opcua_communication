@@ -10,6 +10,7 @@ import roslib.message
 import rospy
 from opcua import ua, uamethod
 
+import ros_actions
 import ros_server
 
 
@@ -255,16 +256,23 @@ def numberofsubscribers(nametolookfor, topicsDict):
     return ret
 
 
-def refresh_topics(server, topicsdict, idx, topics):
-    ros_topics = rospy.get_published_topics()
+def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics, actions):
+    ros_topics = rospy.get_published_topics(namespace_ros)
 
     for topic_name, topic_type in ros_topics:
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
-            topic = OpcUaROSTopic(server, topics, idx, topic_name, topic_type)
-            topicsdict[topic_name] = topic
+            if "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
+                print("found action" + topic_name)
+                if not ros_actions.present_in_actions_dict(actionsdict, ros_actions.get_correct_name(topic_name)):
+                    print("found action" + topic_name)
+                    actionsdict[ros_actions.get_correct_name(topic_name)] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
+                                                                                                       ros_actions.get_correct_name(topic_name))
+            else:
+                topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
+                topicsdict[topic_name] = topic
 
         elif numberofsubscribers(topic_name, topicsdict) <= 1:
-            topicsdict[topic_name].recursive_delete_items(server.get_node(ua.NodeId(topic_name, idx)))
+            topicsdict[topic_name].recursive_delete_items(server.get_node(ua.NodeId(topic_name, idx_topics)))
             del topicsdict[topic_name]
 
     ros_topics = rospy.get_published_topics()
@@ -276,10 +284,11 @@ def refresh_topics(server, topicsdict, idx, topics):
             if topic_nameOPC == topicROS:
                 found = True
         if not found:
-            topicsdict[topic_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(topic_nameOPC, idx)))
+            topicsdict[topic_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(topic_nameOPC, idx_topics)))
             tobedeleted.append(topic_nameOPC)
         # this doesn't seem to be working, but parent is removed in recursive delete function
         if len(topicsdict[topic_nameOPC].parent.get_children()) <= 1 and "rosout" not in topic_nameOPC:
             server.delete_nodes([topicsdict[topic_nameOPC].parent])
     for name in tobedeleted:
         del topicsdict[name]
+    ros_actions.refresh_dict(actionsdict, server, idx_actions)

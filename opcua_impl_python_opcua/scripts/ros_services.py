@@ -99,8 +99,8 @@ class OpcUaROSService:
             self.server.delete_nodes([child])
         self.server.delete_nodes([self.method])
 
-    def recursive_create_objects(self, topic_name, idx, parent):
-        hierachy = topic_name.split('/')
+    def recursive_create_objects(self, name, idx, parent):
+        hierachy = name.split('/')
         if len(hierachy) == 0 or len(hierachy) == 1:
             return parent
         for name in hierachy:
@@ -179,8 +179,8 @@ def getargarray(sample_req):
     return array
 
 
-def refresh_services(server, servicesdict, idx, services_object_opc):
-    rosservices = rosservice.get_service_list()
+def refresh_services(namespace_ros, server, servicesdict, idx, services_object_opc):
+    rosservices = rosservice.get_service_list(namespace=namespace_ros)
 
     for service_name_ros in rosservices:
         try:
