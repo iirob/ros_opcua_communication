@@ -20,7 +20,6 @@ def nextname(hierachy, index_of_last_processed):
 
 def main(args):
     namespace_ros = args[1]
-    print (namespace_ros)
     topicsDict = {}
     servicesDict = {}
     actionsDict = {}

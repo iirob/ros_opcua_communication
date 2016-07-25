@@ -261,10 +261,8 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
 
     for topic_name, topic_type in ros_topics:
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
-            if "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
-                print("found action" + topic_name)
+            if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
                 if not ros_actions.present_in_actions_dict(actionsdict, ros_actions.get_correct_name(topic_name)):
-                    print("found action" + topic_name)
                     actionsdict[ros_actions.get_correct_name(topic_name)] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
                                                                                                        ros_actions.get_correct_name(topic_name))
             else:
