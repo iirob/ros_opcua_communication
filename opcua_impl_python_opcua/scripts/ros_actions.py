@@ -1,8 +1,12 @@
 # !/usr/bin/env python
 # thanks to https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_action/src/rqt_action/action_plugin.py
 import random
+from pydoc import locate
 
+import actionlib
+import rospy
 from opcua import ua, common
+from opcua import uamethod
 
 import ros_server
 import ros_topics
@@ -36,22 +40,35 @@ def get_correct_name(topic_name):
 class OpcUaROSAction:
     def __init__(self, server, parent, idx, name):
         self.server = server
-        self.parent = self.recursive_create_objects(name, idx, parent)
         self.idx = idx
         self.name = name
+        pkg = rospy.get_param("/rosopcua/actionpackage")
+        msg_name = self.get_msg_name()
+        class_name = msg_name.replace("_", "")
+        goal_name = self.get_goal_name()
         try:
-            actionspec = self.get_msg_name()
-            print(actionspec)
+            actionspec = locate(pkg + "." + msg_name)
+            goalspec = locate(pkg + "." + goal_name)
+            print(goalspec)
+            print(goal_name.replace("_", ""))
+            self.goal_class = getattr(goalspec, goal_name.replace("_", ""))
+            self.client = actionlib.SimpleActionClient(class_name.lower(), getattr(actionspec, class_name))
+            self.parent = self.recursive_create_objects(name, idx, parent)
+
         except (ValueError, TypeError) as e:
             print(e)
 
         result = self.parent.add_object(ua.NodeId("result", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                         ua.QualifiedName("result", parent.nodeid.NamespaceIndex))
-        result_node = ros_topics._create_node_with_type(result, self.idx, "goal", "goal", "int16", -1)
+        self.result_node = ros_topics._create_node_with_type(result, self.idx, "goal_status", "goal_status", "string", -1)
+
+        self.result_node.set_value(repr("No goal sent yet"))
+        goal = self.parent.add_object(ua.NodeId("goal", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                                      ua.QualifiedName("goal", parent.nodeid.NamespaceIndex))
+        goal_node = goal.add_method(idx, "send_goal", self.send_goal, [], [])
 
     def recursive_create_objects(self, name, idx, parent):
         hierachy = name.split('/')
-        print(hierachy)
         if len(hierachy) == 0 or len(hierachy) == 1:
             return parent
         for name in hierachy:
@@ -74,6 +91,19 @@ class OpcUaROSAction:
 
     def get_msg_name(self):
         return "_" + str(self.name.split("/")[-1]).capitalize() + "Action"
+
+    def get_goal_name(self):
+        return "_" + str(self.name.split("/")[-1]).capitalize() + "Goal"
+
+    @uamethod
+    def send_goal(self, parent, *inputs):
+        print("sending goal")
+        try:
+            self.client.send_goal(self.goal_class())
+        except Exception as e:
+            print(e)
+        self.result_node.set_value(repr(self.client.get_goal_status_text()))
+        return
 
 
 def refresh_dict(actionsdict, server, idx_actions):

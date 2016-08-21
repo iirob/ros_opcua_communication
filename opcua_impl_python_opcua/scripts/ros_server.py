@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import sys
 import time
 
@@ -19,11 +20,11 @@ def nextname(hierachy, index_of_last_processed):
 
 
 def main(args):
-    namespace_ros = args[1]
+    namespace_ros = rospy.get_param("/rosopcua/namespace")
     topicsDict = {}
     servicesDict = {}
     actionsDict = {}
-    rospy.init_node("opcua_server")
+    rospy.init_node("rosopcua")
 
     server = Server()
     server.set_endpoint("opc.tcp://0.0.0.0:21554/")

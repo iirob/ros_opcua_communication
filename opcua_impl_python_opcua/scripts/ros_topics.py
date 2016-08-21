@@ -173,7 +173,7 @@ class OpcUaROSTopic:
         return parent
 
 
-# to unsigned integers as to fullfill ros specification. Currently only uses a few different types,
+# to unsigned integers as to fulfill ros specification. Currently only uses a few different types,
 # no other types encountered so far.
 def correct_type(node, typemessage):
     data_value = node.get_data_value()
@@ -247,13 +247,15 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
 
 
 # Used to delete obsolete topics
-def numberofsubscribers(nametolookfor, topicsDict):
-    # rosout only has one subscriber/publisher at all times, so ignore.
-    if nametolookfor != "/rosout":
-        ret = topicsDict[nametolookfor]._subscriber.get_num_connections()
-    else:
-        ret = 2
-    return ret
+# def numberofsubscribers(nametolookfor, topicsDict):
+#     # rosout only has one subscriber/publisher at all times, so ignore.
+#     if nametolookfor != "/rosout":
+#         ret = topicsDict[nametolookfor]._subscriber.get_num_connections()
+#         ret2 = topicsDict[nametolookfor]._publisher.get_num_connections()
+#     else:
+#         ret = 2
+#         ret2 = 0
+#     return ret + ret2
 
 
 def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics, actions):
@@ -269,9 +271,10 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                 topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
                 topicsdict[topic_name] = topic
 
-        elif numberofsubscribers(topic_name, topicsdict) <= 1:
-            topicsdict[topic_name].recursive_delete_items(server.get_node(ua.NodeId(topic_name, idx_topics)))
-            del topicsdict[topic_name]
+                # elif numberofsubscribers(topic_name, topicsdict) <= 0 and "rosout" not in topic_name:
+                #     print("deleting " + topic_name)
+                #     topicsdict[topic_name].recursive_delete_items(server.get_node(ua.NodeId(topic_name, idx_topics)))
+                #     del topicsdict[topic_name]
 
     ros_topics = rospy.get_published_topics()
     # use to not get dict changed during iteration errors
@@ -285,8 +288,9 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
             topicsdict[topic_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(topic_nameOPC, idx_topics)))
             tobedeleted.append(topic_nameOPC)
         # this doesn't seem to be working, but parent is removed in recursive delete function
-        if len(topicsdict[topic_nameOPC].parent.get_children()) <= 1 and "rosout" not in topic_nameOPC:
+        if len(topicsdict[topic_nameOPC].parent.get_children()) <= 0 and "rosout" not in topic_nameOPC:
             server.delete_nodes([topicsdict[topic_nameOPC].parent])
-    for name in tobedeleted:
-        del topicsdict[name]
+    # for name in tobedeleted:
+    #     print("deleting " + name)
+    #     del topicsdict[name]
     ros_actions.refresh_dict(actionsdict, server, idx_actions)
