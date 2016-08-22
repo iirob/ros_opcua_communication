@@ -98,6 +98,7 @@ class OpcUaROSService:
                 del self._nodes[child]
             self.server.delete_nodes([child])
         self.server.delete_nodes([self.method])
+        ros_server.own_rosnode_cleanup()
 
     def recursive_create_objects(self, name, idx, parent):
         hierachy = name.split('/')

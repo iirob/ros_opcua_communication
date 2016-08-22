@@ -54,18 +54,18 @@ class OpcUaROSAction:
             self.goal_class = getattr(goalspec, goal_name.replace("_", ""))
             self.client = actionlib.SimpleActionClient(class_name.lower(), getattr(actionspec, class_name))
             self.parent = self.recursive_create_objects(name, idx, parent)
+            self.result = self.parent.add_object(ua.NodeId("result", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                                                 ua.QualifiedName("result", parent.nodeid.NamespaceIndex))
+            self.result_node = ros_topics._create_node_with_type(self.result, self.idx, "goal_status", "goal_status", "string", -1)
 
-        except (ValueError, TypeError) as e:
-            print(e)
-
-        result = self.parent.add_object(ua.NodeId("result", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
-                                        ua.QualifiedName("result", parent.nodeid.NamespaceIndex))
-        self.result_node = ros_topics._create_node_with_type(result, self.idx, "goal_status", "goal_status", "string", -1)
-
-        self.result_node.set_value(repr("No goal sent yet"))
-        goal = self.parent.add_object(ua.NodeId("goal", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+            self.result_node.set_value(repr("No goal sent yet"))
+            self.goal = self.parent.add_object(ua.NodeId("goal", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                       ua.QualifiedName("goal", parent.nodeid.NamespaceIndex))
-        goal_node = goal.add_method(idx, "send_goal", self.send_goal, [], [])
+            self.goal_node = self.goal.add_method(idx, "send_goal", self.send_goal, [], [])
+
+        except (ValueError, TypeError, AttributeError) as e:
+            rospy.logerr("Error while creating Action Objects %s", e)
+            return
 
     def recursive_create_objects(self, name, idx, parent):
         hierachy = name.split('/')
@@ -103,8 +103,30 @@ class OpcUaROSAction:
         except Exception as e:
             print(e)
         self.result_node.set_value(repr(self.client.get_goal_status_text()))
-        return
+
+    def recursive_delete_items(self, item):
+        self.client.cancel_all_goals()
+        for child in item.get_children():
+            self.recursive_delete_items(child)
+            self.server.delete_nodes([child])
+        self.server.delete_nodes([self.result, self.result_node, self.goal_node, self.goal, self.parent])
+        ros_server.own_rosnode_cleanup()
 
 
-def refresh_dict(actionsdict, server, idx_actions):
-    pass
+def refresh_dict(namespace_ros, actionsdict, server, idx_actions):
+    topics = rospy.get_published_topics(namespace_ros)
+    tobedeleted = []
+    for actionNameOPC in actionsdict:
+        found = False
+        for topicROS, topic_type in topics:
+            if actionNameOPC in topicROS:
+                found = True
+        if not found:
+            actionsdict[actionNameOPC].recursive_delete_items(actionsdict[actionNameOPC].parent)
+            tobedeleted.append(actionNameOPC)
+        # this doesn't seem to be working, but parent is removed in recursive delete function
+        if len(actionsdict[actionNameOPC].parent.get_children()) <= 1 and "rosout" not in actionNameOPC:
+            server.delete_nodes([actionsdict[actionNameOPC].parent])
+            ros_server.own_rosnode_cleanup()
+    for name in tobedeleted:
+        del actionsdict[name]

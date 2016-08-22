@@ -2,6 +2,8 @@
 import sys
 import time
 
+import rosgraph
+import rosnode
 import rospy
 from opcua import Server
 
@@ -17,6 +19,14 @@ def nextname(hierachy, index_of_last_processed):
         output += hierachy[counter]
         counter += 1
     return output
+
+
+def own_rosnode_cleanup():
+    pinged, unpinged = rosnode.rosnode_ping_all()
+    if unpinged:
+        master = rosgraph.Master(rosnode.ID)
+        # noinspection PyTypeChecker
+        rosnode.cleanup_master_blacklist(master, unpinged)
 
 
 def main(args):
