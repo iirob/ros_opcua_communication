@@ -3,7 +3,6 @@
 # Thanks to:
 # https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_service_caller/src/rqt_service_caller/service_caller_widget.py
 import math
-import numpy
 import random
 import time
 
@@ -121,27 +120,6 @@ class OpcUaROSService:
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                     return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
         return parent
-
-
-def primitivetovariant(typeofprimitive):
-    if isinstance(typeofprimitive, list):
-        dv = ua.VariantType.Null
-    elif typeofprimitive == bool:
-        dv = ua.VariantType.Boolean
-    elif typeofprimitive == numpy.byte:
-        dv = ua.VariantType.Byte
-    elif typeofprimitive == int:
-        dv = ua.VariantType.Int32
-    elif typeofprimitive == float:
-        dv = ua.VariantType.Float
-    elif typeofprimitive == numpy.double:
-        dv = ua.VariantType.Double
-    elif typeofprimitive == str:
-        dv = ua.VariantType.String
-    else:
-        print ("This type couldn't be mapped" + str(typeofprimitive))
-        return ua.VariantType.ByteString
-    return dv
 
 
 def getargarray(sample_req):

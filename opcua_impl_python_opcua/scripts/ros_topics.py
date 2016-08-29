@@ -264,7 +264,8 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
             if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
                 if not ros_actions.present_in_actions_dict(actionsdict, ros_actions.get_correct_name(topic_name)):
                     actionsdict[ros_actions.get_correct_name(topic_name)] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
-                                                                                                       ros_actions.get_correct_name(topic_name))
+                                                                                                       ros_actions.get_correct_name(topic_name),
+                                                                                                       topic_type)
             else:
                 topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
                 topicsdict[topic_name] = topic
@@ -287,4 +288,4 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
             tobedeleted.append(topic_nameOPC)
     for name in tobedeleted:
         del topicsdict[name]
-    ros_actions.refresh_dict(namespace_ros, actionsdict, server, idx_actions)
+    ros_actions.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)

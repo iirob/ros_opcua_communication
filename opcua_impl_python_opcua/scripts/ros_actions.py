@@ -9,6 +9,7 @@ from opcua import ua, common
 from opcua import uamethod
 
 import ros_server
+import ros_services
 import ros_topics
 
 
@@ -37,38 +38,89 @@ def get_correct_name(topic_name):
         counter += 1
 
 
+def create_arg_array(types, goal_class):
+    array = []
+    i = 0
+    for type in types:
+        if "int" or "string" or "float" or "boolean" in type:
+            arg = ua.Argument()
+            arg.Name = goal_class.__slots__[i]
+            arg.DataType = ua.NodeId(ros_services.getobjectidfromtype(type))
+            arg.ValueRank = -1
+            arg.ArrayDimensions = []
+            arg.Description = ua.LocalizedText(arg.Name)
+            array.append(arg)
+        else:
+            if "list" in type:
+                arg = ua.Argument()
+                arg.Name = goal_class.__slots__[i]
+                arg.DataType = ua.NodeId(ros_services.getobjectidfromtype("array"))
+                arg.ValueRank = -1
+                arg.ArrayDimensions = []
+                arg.Description = ua.LocalizedText("Array")
+            else:
+                arg = ua.Argument()
+                arg.Name = goal_class.__slots__[i]
+                arg.DataType = ua.NodeId(ros_services.getobjectidfromtype(type))
+                arg.ValueRank = -1
+                arg.ArrayDimensions = []
+                arg.Description = ua.LocalizedText("Object")
+        i += 1
+    return array
+
+
 class OpcUaROSAction:
-    def __init__(self, server, parent, idx, name):
+    def __init__(self, server, parent, idx, name, type):
         self.server = server
         self.idx = idx
         self.name = name
-        pkg = rospy.get_param("/rosopcua/actionpackage")
+        self.type = type.split("/")[0] + ".msg"
+        # pkg = rospy.get_param("/rosopcua/actionpackage")
         msg_name = self.get_msg_name()
         class_name = msg_name.replace("_", "")
         goal_name = self.get_goal_name()
+
         try:
-            actionspec = locate(pkg + "." + msg_name)
-            goalspec = locate(pkg + "." + goal_name)
+            actionspec = locate(self.type + "." + msg_name)
+            goalspec = locate(self.type + "." + goal_name)
             self.goal_class = getattr(goalspec, goal_name.replace("_", ""))
             self.client = actionlib.SimpleActionClient(self.get_ns_name(), getattr(actionspec, class_name))
             self.client.wait_for_server()
             self.parent = self.recursive_create_objects(name, idx, parent)
-            self.result = self.parent.add_object(ua.NodeId("result", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+            self.result = self.parent.add_object(ua.NodeId(self.name + "_result", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                                  ua.QualifiedName("result", parent.nodeid.NamespaceIndex))
-            self.result_node = ros_topics._create_node_with_type(self.result, self.idx, "result_value", "result_value", "string", -1)
+            self.result_node = ros_topics._create_node_with_type(self.result, self.idx, self.name + "_result_value", self.name + "_result_value",
+                                                                 "string", -1)
 
             self.result_node.set_value(repr("No goal sent yet"))
-            self.goal = self.parent.add_object(ua.NodeId("goal", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
-                                      ua.QualifiedName("goal", parent.nodeid.NamespaceIndex))
+            self.goal = self.parent.add_object(ua.NodeId(self.name + "_goal", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                                               ua.QualifiedName("goal", parent.nodeid.NamespaceIndex))
 
-            # if self.goal_class._slot_types is not None:
-            #     self.goal_node = self.goal.add_method(idx, "send_goal", self.send_goal, self.goal_class._slot_types, [])
-            # else:
-            self.goal_node = self.goal.add_method(idx, "send_goal", self.send_goal, [], [])
+            self.goal_node = self.goal.add_method(idx, self.name + "_send_goal", self.send_goal,
+                                                  create_arg_array(self.goal_class._slot_types, self.goal_class), [])
+
+            self.goal_cancel = self.goal.add_method(idx, self.name + "_cancel_goal", self.cancel_goal, [], [])
+
+            self.feedback = self.parent.add_object(ua.NodeId(self.name + "feedback", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                                                   ua.QualifiedName("feedback", parent.nodeid.NamespaceIndex))
+            self.feedback_node = ros_topics._create_node_with_type(self.feedback, self.idx, self.name + "_feedback", self.name + "_feedback",
+                                                                   "string", -1)
+            self.feedback_node.set_value(repr("No goal sent yet"))
 
         except (ValueError, TypeError, AttributeError) as e:
             rospy.logerr("Error while creating Action Objects %s", e)
             return
+
+    def message_callback(self, message):
+        pass
+
+    @uamethod
+    def cancel_goal(self):
+        print("cancelling goal!")
+        try:
+            self.client.cancel_all_goals()
+        except (rospy.ROSException, common.uaerrors.UaError) as e:
+            print(e)
 
     def recursive_create_objects(self, name, idx, parent):
         hierachy = name.split('/')
@@ -105,9 +157,12 @@ class OpcUaROSAction:
     def send_goal(self, parent, *inputs):
         print("sending goal")
         try:
-            self.client.send_goal(self.goal_class())
-            self.client.wait_for_result()
-            self.result_node.set_value(repr(self.client.get_result()))
+            # for input in inputs:
+            #     setattr(goal, input.Name, ros_topics.correct_type(input))
+            self.client.send_goal(self.goal_class(*inputs))
+            # self.client.wait_for_result()
+            # self.result_node.set_value(repr(self.client.get_result()))
+            # self.client.get_goal_status_text()
         except rospy.ROSException as e:
             rospy.logwarn(e)
 
@@ -120,14 +175,43 @@ class OpcUaROSAction:
         ros_server.own_rosnode_cleanup()
 
 
-def refresh_dict(namespace_ros, actionsdict, server, idx_actions):
+def map_status_to_string(param):
+    if param == 9:
+        return "Goal LOST"
+    elif param == 8:
+        return "Goal RECALLED"
+    elif param == 7:
+        return "Goal RECALLING"
+    elif param == 6:
+        return "Goal PREEMPTING"
+    elif param == 5:
+        return "Goal REJECTED"
+    elif param == 4:
+        return "Goal ABORTED"
+    elif param == 3:
+        return "Goal SUCEEDED"
+    elif param == 2:
+        return "Goal PREEMPTED"
+    elif param == 1:
+        return "Goal ACTIVE"
+    elif param == 0:
+        return "Goal PENDING"
+
+
+def refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions):
     topics = rospy.get_published_topics(namespace_ros)
     tobedeleted = []
     for actionNameOPC in actionsdict:
         found = False
         for topicROS, topic_type in topics:
+            ros_server.own_rosnode_cleanup()
             if actionNameOPC in topicROS:
                 found = True
+                try:
+                    actionsdict[actionNameOPC].result_node.set_value(repr(actionsdict[actionNameOPC].client.get_result()))
+                    actionsdict[actionNameOPC].feedback_node.set_value(map_status_to_string((actionsdict[actionNameOPC].client.get_state())))
+                except rospy.ROSException as e:
+                    rospy.loginfo("No goal sent yet", e)
         if not found:
             actionsdict[actionNameOPC].recursive_delete_items(actionsdict[actionNameOPC].parent)
             tobedeleted.append(actionNameOPC)
