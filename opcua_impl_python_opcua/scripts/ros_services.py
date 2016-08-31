@@ -15,7 +15,7 @@ import ros_server
 
 
 def filloutputarray(response):
-    print response
+    rospy.logdebug("Filling OutputArray with: " + response)
     outputs = []
     counter = 0
     for slot_name in response.__slots__:
@@ -39,8 +39,7 @@ def filloutputarray(response):
                 output_arg.ArrayDimensions = []
                 output_arg.Description = ua.LocalizedText("Array")
             else:
-                print("Output Value is a primitive: " + slot_name)
-
+                rospy.logdebug("Output Value is a primitive: " + slot_name)
                 output_arg = ua.Argument()
                 output_arg.Name = slot_name
                 output_arg.DataType = ua.NodeId(getobjectidfromtype(type(slot)))
@@ -87,7 +86,7 @@ class OpcUaROSService:
             else:
                 return
         except (rospy.ROSException, common.uaerrors.UaError) as e:
-            print(e)
+            rospy.logerr("Error when calling service " + self.name, e)
 
     def recursive_delete_items(self, item):
         self.proxy.close()
@@ -169,7 +168,7 @@ def refresh_services(namespace_ros, server, servicesdict, idx, services_object_o
                 servicesdict[service_name_ros] = service
         except (rosservice.ROSServiceException, rosservice.ROSServiceIOException) as e:
             server.stop()
-            print (e)
+            rospy.logerr("Error when trying to refresh services", e)
             quit()
     # use extra iteration as to not get "dict changed during iteration" errors
     tobedeleted = []
@@ -218,6 +217,6 @@ def getobjectidfromtype(type_name):
     elif type_name == 'array':
         dv = ua.ObjectIds.ArrayItemType
     else:
-        # print (type_name)
+        rospy.logerr("Can't create type with name " + type_name)
         return None
     return dv

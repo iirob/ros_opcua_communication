@@ -94,7 +94,7 @@ class OpcUaROSTopic:
                         setattr(self.message_instance, name, self.create_message_instance(child))
             self._publisher.publish(self.message_instance)
         except rospy.ROSException as e:
-            print(e)
+            rospy.logerr("Error when updating node " + self.name, e)
             self.server.delete_nodes([self.parent])
 
     def update_value(self, topic_name, message):
@@ -186,7 +186,7 @@ def correct_type(node, typemessage):
         if typemessage.__name__ == "int":
             result = int(result) & 0xff
     else:
-        print ("can't convert: " + str(node.get_data_value.Value))
+        rospy.logerr("can't convert: " + str(node.get_data_value.Value))
         return None
     return result
 
@@ -235,7 +235,7 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
     elif type_name == 'string':
         dv = ua.Variant('', ua.VariantType.String)
     else:
-        print ("can't create node with type" + str(type_name))
+        rospy.logerr("can't create node with type" + str(type_name))
         return None
 
     if array_size is not None:
@@ -258,14 +258,17 @@ def numberofsubscribers(nametolookfor, topicsDict):
 
 def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics, actions):
     ros_topics = rospy.get_published_topics(namespace_ros)
-
     for topic_name, topic_type in ros_topics:
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
             if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
                 if not ros_actions.present_in_actions_dict(actionsdict, ros_actions.get_correct_name(topic_name)):
-                    actionsdict[ros_actions.get_correct_name(topic_name)] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
-                                                                                                       ros_actions.get_correct_name(topic_name),
-                                                                                                       topic_type)
+                    try:
+                        actionsdict[ros_actions.get_correct_name(topic_name)] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
+                                                                                                           ros_actions.get_correct_name(topic_name),
+                                                                                                           topic_type)
+                    except (ValueError, TypeError, AttributeError) as e:
+                        rospy.logerr("Error while creating Action Objects %s", e)
+
             else:
                 topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
                 topicsdict[topic_name] = topic
