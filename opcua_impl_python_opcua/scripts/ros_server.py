@@ -51,7 +51,7 @@ def main(args):
     idx_actions = server.register_namespace(uri_actions)
     # get Objects node, this is where we should put our custom stuff
     objects = server.get_objects_node()
-
+    # one object per type we are watching
     topics_object = objects.add_object(idx_topics, "ROS-Topics")
     services_object = objects.add_object(idx_services, "ROS-Services")
     actions_object = objects.add_object(idx_actions, "ROS_Actions")

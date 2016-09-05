@@ -14,44 +14,6 @@ from opcua import ua, uamethod, common
 import ros_server
 
 
-def filloutputarray(response):
-    rospy.logdebug("Filling OutputArray with: " + response)
-    outputs = []
-    counter = 0
-    for slot_name in response.__slots__:
-        slot = getattr(response, slot_name)
-        if hasattr(slot, '_type'):
-            slot_type = slot._type
-            slot_desc = slot._description
-            output_arg = ua.Argument()
-            output_arg.Name = "Input Argument " + repr(counter)
-            output_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
-            output_arg.ValueRank = -1
-            output_arg.ArrayDimensions = []
-            output_arg.Description = ua.LocalizedText(slot_desc)
-
-        else:
-            if isinstance(slot, list):
-                output_arg = ua.Argument()
-                output_arg.Name = "Input Argument " + repr(counter)
-                output_arg.DataType = ua.NodeId(getobjectidfromtype("array"))
-                output_arg.ValueRank = -1
-                output_arg.ArrayDimensions = []
-                output_arg.Description = ua.LocalizedText("Array")
-            else:
-                rospy.logdebug("Output Value is a primitive: " + slot_name)
-                output_arg = ua.Argument()
-                output_arg.Name = slot_name
-                output_arg.DataType = ua.NodeId(getobjectidfromtype(type(slot)))
-                output_arg.ValueRank = -1
-                output_arg.ArrayDimensions = []
-                output_arg.Description = ua.LocalizedText(slot_name)
-        counter += 1
-        if output_arg is not None:
-            outputs.append(output_arg.to_binary())
-    return outputs
-
-
 class OpcUaROSService:
     def __init__(self, server, parent, idx, service_name, service_class):
         self.server = server
@@ -220,3 +182,41 @@ def getobjectidfromtype(type_name):
         rospy.logerr("Can't create type with name " + type_name)
         return None
     return dv
+
+
+def filloutputarray(response):
+    rospy.logdebug("Filling OutputArray with: " + response)
+    outputs = []
+    counter = 0
+    for slot_name in response.__slots__:
+        slot = getattr(response, slot_name)
+        if hasattr(slot, '_type'):
+            slot_type = slot._type
+            slot_desc = slot._description
+            output_arg = ua.Argument()
+            output_arg.Name = "Input Argument " + repr(counter)
+            output_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
+            output_arg.ValueRank = -1
+            output_arg.ArrayDimensions = []
+            output_arg.Description = ua.LocalizedText(slot_desc)
+
+        else:
+            if isinstance(slot, list):
+                output_arg = ua.Argument()
+                output_arg.Name = "Input Argument " + repr(counter)
+                output_arg.DataType = ua.NodeId(getobjectidfromtype("array"))
+                output_arg.ValueRank = -1
+                output_arg.ArrayDimensions = []
+                output_arg.Description = ua.LocalizedText("Array")
+            else:
+                rospy.logdebug("Output Value is a primitive: " + slot_name)
+                output_arg = ua.Argument()
+                output_arg.Name = slot_name
+                output_arg.DataType = ua.NodeId(getobjectidfromtype(type(slot)))
+                output_arg.ValueRank = -1
+                output_arg.ArrayDimensions = []
+                output_arg.Description = ua.LocalizedText(slot_name)
+        counter += 1
+        if output_arg is not None:
+            outputs.append(output_arg.to_binary())
+    return outputs
