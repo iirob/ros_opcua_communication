@@ -30,7 +30,7 @@ class OpcUaROSTopic:
 
         except rospy.ROSException:
             self.message_class = None
-            rospy.logfatal("There is not found message type class " + topic_type)
+            rospy.logfatal("Couldn't find message class for type " + topic_type)
 
         self._recursive_create_items(self.parent, idx, topic_name, topic_type, self.message_instance, True)
 
@@ -261,11 +261,14 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
     for topic_name, topic_type in ros_topics:
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
             if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
-                if not ros_actions.present_in_actions_dict(actionsdict, ros_actions.get_correct_name(topic_name)):
+                if ros_actions.get_correct_name(topic_name) not in actionsdict:
                     try:
                         actionsdict[ros_actions.get_correct_name(topic_name)] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
                                                                                                            ros_actions.get_correct_name(topic_name),
-                                                                                                           topic_type)
+                                                                                                           topic_type,
+                                                                                                           get_feedback_type(
+                                                                                                               ros_actions.get_correct_name(
+                                                                                                                   topic_name)))
                     except (ValueError, TypeError, AttributeError) as e:
                         rospy.logerr("Error while creating Action Objects %s", e)
 
@@ -292,3 +295,11 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
     for name in tobedeleted:
         del topicsdict[name]
     ros_actions.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
+
+
+def get_feedback_type(action_name):
+    ros_topics = rospy.get_published_topics(action_name)
+    for name, type in ros_topics:
+        if "feedback" in name:
+            return type
+    rospy.logerr("Couldn't find feedback for action " + action_name)

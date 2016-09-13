@@ -4,9 +4,12 @@ import random
 from pydoc import locate
 
 import actionlib
+import roslib
 import rospy
 from opcua import ua, common
 from opcua import uamethod
+from opcua.common.uaerrors import UaError
+from roslib import message
 
 import ros_server
 import ros_services
@@ -14,11 +17,13 @@ import ros_topics
 
 
 class OpcUaROSAction:
-    def __init__(self, server, parent, idx, name, action_type):
+    def __init__(self, server, parent, idx, name, action_type, feedback_type):
         self.server = server
         self.idx = idx
         self.name = name
         self.type = action_type.split("/")[0] + ".msg"
+        self.feedback_type = feedback_type
+        self._feedback_nodes = {}
         msg_name = self.get_msg_name()
         class_name = msg_name.replace("_", "")
         goal_name = self.get_goal_name()
@@ -33,7 +38,7 @@ class OpcUaROSAction:
         self.result_node = ros_topics._create_node_with_type(self.result, self.idx, self.name + "_result_value", self.name + "_result_value",
                                                              "string", -1)
 
-        self.result_node.set_value("No goal sent yet")
+        self.result_node.set_value("No goal completed yet")
         self.goal = self.parent.add_object(ua.NodeId(self.name + "_goal", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                            ua.QualifiedName("goal", parent.nodeid.NamespaceIndex))
 
@@ -44,20 +49,41 @@ class OpcUaROSAction:
 
         self.feedback = self.parent.add_object(ua.NodeId(self.name + "feedback", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                                ua.QualifiedName("feedback", parent.nodeid.NamespaceIndex))
-        self.feedback_node = ros_topics._create_node_with_type(self.feedback, self.idx, self.name + "_feedback", self.name + "_feedback",
-                                                               "string", -1)
-        self.feedback_node.set_value("No goal sent yet")
+        try:
+            self.feedback_message_class = roslib.message.get_message_class(self.feedback_type)
+            self.feedback_message_instance = self.feedback_message_class()
+
+        except rospy.ROSException:
+            self.message_class = None
+            rospy.logfatal("Didn't find feedback message class for type " + self.feedback_type)
+
+        self._recursive_create_feedback_items(self.feedback, self.name + "/feedback", self.feedback_type,
+                                              getattr(self.feedback_message_instance, "feedback"))
+
         self.status = self.parent.add_object(ua.NodeId(self.name + "status", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                              ua.QualifiedName("status", parent.nodeid.NamespaceIndex))
         self.status_node = ros_topics._create_node_with_type(self.status, self.idx, self.name + "_status", self.name + "_status",
                                                              "string", -1)
         self.status_node.set_value("No goal sent yet")
 
+    def message_callback(self, message):
+        self.update_feedback_node(message)
+
+    def update_feedback_node(self, feedback_message):
+        for name in self._feedback_nodes:
+            attr_name = name.split("/")[-1]
+            try:
+                current_attribute = getattr(feedback_message, attr_name)
+                self._feedback_nodes[name].set_value(current_attribute)
+            except (AttributeError, UaError) as e:
+                rospy.logerr("Error occured when updating the feedback value %s", e)
+
     @uamethod
     def cancel_goal(self, parent, *inputs):
         rospy.loginfo("cancelling goal " + self.name)
         try:
             self.client.cancel_all_goals()
+            self.update_state()
         except (rospy.ROSException, common.uaerrors.UaError) as e:
             rospy.logerr("Error when cancelling a goal for " + self.name, e)
 
@@ -85,6 +111,40 @@ class OpcUaROSAction:
                     return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
         return parent
 
+    def _recursive_create_feedback_items(self, parent, feedback_topic_name, type_name, feedback_message):
+        idx = self.idx
+        topic_text = feedback_topic_name.split('/')[-1]
+        if '[' in topic_text:
+            topic_text = topic_text[topic_text.index('['):]
+
+        # This here are 'complex data'
+        if hasattr(feedback_message, '__slots__') and hasattr(feedback_message, '_slot_types'):
+            complex_type = True
+            new_node = parent.add_object(ua.NodeId(feedback_topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                                         ua.QualifiedName(feedback_topic_name, parent.nodeid.NamespaceIndex))
+
+            for slot_name, type_name_child in zip(feedback_message.__slots__, feedback_message._slot_types):
+                self._recursive_create_feedback_items(new_node, feedback_topic_name + '/' + slot_name, type_name_child,
+                                                      getattr(feedback_message, slot_name))
+            self._feedback_nodes[feedback_topic_name] = new_node
+
+        else:
+            # This are arrays
+            base_type_str, array_size = ros_topics._extract_array_info(type_name)
+            try:
+                base_instance = roslib.message.get_message_class(base_type_str)()
+            except (ValueError, TypeError):
+                base_instance = None
+
+            if array_size is not None and hasattr(base_instance, '__slots__'):
+                for index in range(array_size):
+                    self._recursive_create_feedback_items(parent, feedback_topic_name + '[%d]' % index, base_type_str, base_instance)
+            else:
+                new_node = ros_topics._create_node_with_type(parent, idx, feedback_topic_name, topic_text, type_name, array_size)
+                new_node.set_writable(True)
+                self._feedback_nodes[feedback_topic_name] = new_node
+        return
+
     def get_msg_name(self):
         return "_" + str(self.name.split("/")[-1]).capitalize() + "Action"
 
@@ -99,7 +159,7 @@ class OpcUaROSAction:
     def send_goal(self, parent, *inputs):
         rospy.loginfo("Sending Goal for " + self.name)
         try:
-            self.client.send_goal(self.goal_class(*inputs))
+            self.client.send_goal(self.goal_class(*inputs), done_cb=self.update_result, feedback_cb=self.update_feedback, active_cb=self.update_state)
         except rospy.ROSException as e:
             rospy.logwarn(e)
 
@@ -111,13 +171,15 @@ class OpcUaROSAction:
         self.server.delete_nodes([self.result, self.result_node, self.goal_node, self.goal, self.parent])
         ros_server.own_rosnode_cleanup()
 
+    def update_result(self, state, result):
+        self.status_node.set_value(map_status_to_string(state))
+        self.result_node.set_value(repr(result))
 
-def present_in_actions_dict(actionsdict, name):
-    for opc_name in actionsdict:
-        if opc_name == name:
-            return True
+    def update_state(self):
+        self.status_node.set_value(repr(self.client.get_goal_status_text()))
 
-    return False
+    def update_feedback(self, feedback):
+        self.message_callback(feedback)
 
 
 def get_correct_name(topic_name):
@@ -200,16 +262,6 @@ def refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions):
             ros_server.own_rosnode_cleanup()
             if actionNameOPC in topicROS:
                 found = True
-                try:
-                    actionsdict[actionNameOPC].result_node.set_value(repr(actionsdict[actionNameOPC].client.get_result()))
-                    actionsdict[actionNameOPC].feedback_node.set_value(map_status_to_string((actionsdict[actionNameOPC].client.get_state())))
-                    actionsdict[actionNameOPC].status_node.set_value(repr(actionsdict[actionNameOPC].client.get_goal_status_text()))
-                except (rospy.ROSException, AttributeError) as e:
-                    rospy.loginfo("No goal sent yet or error in creation of an Action")
-                    try:
-                        rospy.loginfo(e)
-                    except TypeError as e2:
-                        rospy.loginfo("Error when Logging Exception", e2)
         if not found:
             actionsdict[actionNameOPC].recursive_delete_items(actionsdict[actionNameOPC].parent)
             tobedeleted.append(actionNameOPC)
