@@ -12,6 +12,7 @@ from opcua import ua, uamethod
 
 import ros_actions
 import ros_server
+import rostopic
 
 
 class OpcUaROSTopic:
@@ -73,7 +74,7 @@ class OpcUaROSTopic:
                 new_node = _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size)
                 self._nodes[topic_name] = new_node
 
-        if self._nodes[topic_name] is not None and self._nodes[topic_name].get_node_class() == ua.NodeClass.Variable:
+        if topic_name in self._nodes and self._nodes[topic_name].get_node_class() == ua.NodeClass.Variable:
             self._nodes[topic_name].set_writable(True)
         return
 
@@ -108,17 +109,19 @@ class OpcUaROSTopic:
                     if topic_name + '[%d]' % index in self._nodes:
                         self.update_value(topic_name + '[%d]' % index, slot)
                     else:
-                        base_type_str, _ = _extract_array_info(
-                            self._nodes[topic_name].text(self.type_name))
-                        self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
+                        if topic_name in self._nodes:
+                            base_type_str, _ = _extract_array_info(
+                                self._nodes[topic_name].text(self.type_name))
+                            self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
                                                      base_type_str,
                                                      slot, None)
             # remove obsolete children
-            if len(message) < len(self._nodes[topic_name].get_children()):
-                for i in range(len(message), self._nodes[topic_name].childCount()):
-                    item_topic_name = topic_name + '[%d]' % i
-                    self.recursive_delete_items(self._nodes[item_topic_name])
-                    del self._nodes[item_topic_name]
+            if topic_name in self._nodes:
+                if len(message) < len(self._nodes[topic_name].get_children()):
+                    for i in range(len(message), self._nodes[topic_name].childCount()):
+                        item_topic_name = topic_name + '[%d]' % i
+                        self.recursive_delete_items(self._nodes[item_topic_name])
+                        del self._nodes[item_topic_name]
         else:
             if topic_name in self._nodes and self._nodes[topic_name] is not None:
                 self._nodes[topic_name].set_value(repr(message))
@@ -261,16 +264,18 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
     for topic_name, topic_type in ros_topics:
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
             if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
-                if ros_actions.get_correct_name(topic_name) not in actionsdict:
-                    try:
-                        actionsdict[ros_actions.get_correct_name(topic_name)] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
-                                                                                                           ros_actions.get_correct_name(topic_name),
-                                                                                                           topic_type,
-                                                                                                           get_feedback_type(
-                                                                                                               ros_actions.get_correct_name(
-                                                                                                                   topic_name)))
-                    except (ValueError, TypeError, AttributeError) as e:
-                        rospy.logerr("Error while creating Action Objects %s", e)
+                if "/goal" in topic_name and not "move_base_simple" in topic_name:
+                    if ros_actions.get_correct_name(topic_name) not in actionsdict:
+                        rospy.loginfo("Ignoring Actions...")
+                        #try:
+                            #actionsdict[ros_actions.get_correct_name(topic_name)] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
+                                                                                                           #ros_actions.get_correct_name(topic_name),
+                                                                                                           #topic_type,
+                                                                                                           #get_feedback_type(
+                                                                                                               #ros_actions.get_correct_name(
+                                                                                                                   #topic_name)))
+                        #except (ValueError, TypeError, AttributeError) as e:
+                            #rospy.logerr("Error while creating Action Objects for Action " + topic_name)
 
             else:
                 topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
@@ -298,8 +303,13 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
 
 
 def get_feedback_type(action_name):
-    ros_topics = rospy.get_published_topics(action_name)
-    for name, type in ros_topics:
-        if "feedback" in name:
+    try:
+        type, name, fn = rostopic.get_topic_type(action_name + "/feedback")
+        return type
+    except rospy.ROSException as e:
+        try:
+            type, name, fn = rostopic.get_topic_type(action_name + "/Feedback", e)
             return type
-    rospy.logerr("Couldn't find feedback for action " + action_name)
+        except rospy.ROSException as e2:
+            rospy.logerr("Couldnt find feedback type for action " + action_name, e2)
+            return None

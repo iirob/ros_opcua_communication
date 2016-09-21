@@ -38,16 +38,18 @@ class OpcUaROSService:
         self.outputs = getargarray(sample_resp)
         self.method = self.parent.add_method(idx, self.name, self.call_service, inputs, self.outputs)
 
-    @uamethod
+    
     def call_service(self, parent, *inputs):
         try:
+            rospy.loginfo("Calling Service with name: " + self.name)
             response = self.proxy(*inputs)
+            rospy.loginfo("got response: " + str(response))
             outputarray = filloutputarray(response)
             if not (outputarray is None or len(outputarray) == 0):
                 return outputarray
             else:
                 return
-        except (rospy.ROSException, common.uaerrors.UaError) as e:
+        except (rospy.ROSException, common.uaerrors.UaErro, rosservice.ROSServiceException) as e:
             rospy.logerr("Error when calling service " + self.name, e)
 
     def recursive_delete_items(self, item):
@@ -85,19 +87,11 @@ class OpcUaROSService:
 
 def getargarray(sample_req):
     array = []
-    counter = 0
     for slot_name in sample_req.__slots__:
         slot = getattr(sample_req, slot_name)
         if hasattr(slot, '_type'):
-            slot_type = slot._type
-            slot_desc = slot._description
-            arg = ua.Argument()
-            arg.Name = slot_name
-            arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
-            arg.ValueRank = -1
-            arg.ArrayDimensions = []
-            arg.Description = ua.LocalizedText(slot_desc)
-
+            array_to_merge = getargarray(slot)
+            array.extend(array_to_merge)
         else:
             if isinstance(slot, list):
                 arg = ua.Argument()
@@ -113,8 +107,7 @@ def getargarray(sample_req):
                 arg.ValueRank = -1
                 arg.ArrayDimensions = []
                 arg.Description = ua.LocalizedText(slot_name)
-        array.append(arg)
-        counter += 1
+            array.append(arg)
 
     return array
 
@@ -129,9 +122,10 @@ def refresh_services(namespace_ros, server, servicesdict, idx, services_object_o
                                           rosservice.get_service_class_by_name(service_name_ros))
                 servicesdict[service_name_ros] = service
         except (rosservice.ROSServiceException, rosservice.ROSServiceIOException) as e:
-            server.stop()
-            rospy.logerr("Error when trying to refresh services", e)
-            quit()
+            try: 
+                rospy.logerr("Error when trying to refresh services", e)
+            except TypeError as e2:
+                rospy.logerr("Error when logging an Exception, can't convert everything to string")
     # use extra iteration as to not get "dict changed during iteration" errors
     tobedeleted = []
     rosservices = rosservice.get_service_list()
@@ -154,6 +148,8 @@ def getobjectidfromtype(type_name):
         dv = ua.ObjectIds.Boolean
     elif type_name == 'byte':
         dv = ua.ObjectIds.Byte
+    elif type_name == 'int':
+        dv = ua.ObjectIds.Int16
     elif type_name == 'int8':
         dv = ua.ObjectIds.SByte
     elif type_name == 'uint8':
@@ -178,6 +174,8 @@ def getobjectidfromtype(type_name):
         dv = ua.ObjectIds.String
     elif type_name == 'array':
         dv = ua.ObjectIds.ArrayItemType
+    elif type_name == 'Time' or type_name == 'time':
+        dv = ua.ObjectIds.Time
     else:
         rospy.logerr("Can't create type with name " + type_name)
         return None
@@ -192,13 +190,8 @@ def filloutputarray(response):
         slot = getattr(response, slot_name)
         if hasattr(slot, '_type'):
             slot_type = slot._type
-            slot_desc = slot._description
-            output_arg = ua.Argument()
-            output_arg.Name = "Input Argument " + repr(counter)
-            output_arg.DataType = ua.NodeId(getobjectidfromtype(slot_type))
-            output_arg.ValueRank = -1
-            output_arg.ArrayDimensions = []
-            output_arg.Description = ua.LocalizedText(slot_desc)
+            array_to_merge = filloutputarray(slot)
+            outputs.extend(array_to_merge)
 
         else:
             if isinstance(slot, list):
@@ -212,11 +205,11 @@ def filloutputarray(response):
                 rospy.logdebug("Output Value is a primitive: " + slot_name)
                 output_arg = ua.Argument()
                 output_arg.Name = slot_name
-                output_arg.DataType = ua.NodeId(getobjectidfromtype(type(slot)))
+                output_arg.DataType = ua.NodeId(getobjectidfromtype(type(slot)).__name__)
                 output_arg.ValueRank = -1
                 output_arg.ArrayDimensions = []
                 output_arg.Description = ua.LocalizedText(slot_name)
         counter += 1
         if output_arg is not None:
-            outputs.append(output_arg.to_binary())
+            outputs.append(output_arg)
     return outputs

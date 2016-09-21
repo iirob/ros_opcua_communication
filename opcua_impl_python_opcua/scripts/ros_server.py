@@ -56,10 +56,10 @@ def main(args):
     services_object = objects.add_object(idx_services, "ROS-Services")
     actions_object = objects.add_object(idx_actions, "ROS_Actions")
     while not rospy.is_shutdown():
-        ros_topics.refresh_topics_and_actions(namespace_ros, server, topicsDict, actionsDict, idx_topics, idx_actions, topics_object, actions_object)
+       # ros_topics.refresh_topics_and_actions(namespace_ros, server, topicsDict, actionsDict, idx_topics, idx_actions, topics_object, actions_object)
         ros_services.refresh_services(namespace_ros, server, servicesDict, idx_services, services_object)
         # Don't clog cpu
-        time.sleep(5)
+        time.sleep(10)
 
     server.stop()
     quit()

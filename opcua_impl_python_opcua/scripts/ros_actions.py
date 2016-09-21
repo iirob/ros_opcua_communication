@@ -10,6 +10,7 @@ from opcua import ua, common
 from opcua import uamethod
 from opcua.common.uaerrors import UaError
 from roslib import message
+from cob_sound.msg._SayAction import SayAction
 
 import ros_server
 import ros_services
@@ -21,17 +22,29 @@ class OpcUaROSAction:
         self.server = server
         self.idx = idx
         self.name = name
-        self.type = action_type.split("/")[0] + ".msg"
+        self.type = action_type.split("/")[0]
         self.feedback_type = feedback_type
         self._feedback_nodes = {}
-        msg_name = self.get_msg_name()
-        class_name = msg_name.replace("_", "")
-        goal_name = self.get_goal_name()
-        actionspec = locate(self.type + "." + msg_name)
-        goalspec = locate(self.type + "." + goal_name)
-        self.goal_class = getattr(goalspec, goal_name.replace("_", ""))
-        self.client = actionlib.SimpleActionClient(self.get_ns_name(), getattr(actionspec, class_name))
-        self.client.wait_for_server()
+        goal_name = "_" + action_type.split("/")[-1]
+        msg_name = goal_name.replace("Goal", "")
+        class_name = msg_name.replace("_", "", 1)
+        rospy.loginfo("Trying to find module with name: " + self.type + ".msg." + goal_name.replace("Goal", ""))
+        actionspec = locate(self.type + ".msg." + msg_name )
+        rospy.loginfo("We are creating action: " + self.name)
+        rospy.loginfo("We have type: " + self.type)
+        rospy.loginfo("We have msg name: " + msg_name)
+        rospy.loginfo("We have class name: " + class_name)
+        rospy.loginfo("We have goal name: " + goal_name)
+        rospy.loginfo("We have goal class name: " + goal_name.replace("_", "", 1))
+
+        goalspec = locate(self.type + ".msg." + goal_name)
+        self.goal_class = getattr(goalspec, goal_name.replace("_", "", 1))
+        try:
+            self.client = actionlib.SimpleActionClient(self.get_ns_name(), getattr(actionspec, class_name))
+            self.client.wait_for_server()
+            rospy.loginfo("We have created a SimpleActionClient for action " + self.name)
+        except actionlib.ActionException as e:
+            rospy.logerr("Error when creating ActionClient for action " + self.name, e)
         self.parent = self.recursive_create_objects(name, idx, parent)
         self.result = self.parent.add_object(ua.NodeId(self.name + "_result", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                              ua.QualifiedName("result", parent.nodeid.NamespaceIndex))
@@ -49,15 +62,17 @@ class OpcUaROSAction:
 
         self.feedback = self.parent.add_object(ua.NodeId(self.name + "feedback", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                                ua.QualifiedName("feedback", parent.nodeid.NamespaceIndex))
-        try:
-            self.feedback_message_class = roslib.message.get_message_class(self.feedback_type)
-            self.feedback_message_instance = self.feedback_message_class()
+        if self.feedback_type is not None:
+            try:
+                rospy.loginfo("We are trying to create Feedback for feedback type: " + self.feedback_type)
+                self.feedback_message_class = roslib.message.get_message_class(self.feedback_type)
+                self.feedback_message_instance = self.feedback_message_class()
 
-        except rospy.ROSException:
-            self.message_class = None
-            rospy.logfatal("Didn't find feedback message class for type " + self.feedback_type)
+            except rospy.ROSException:
+                self.message_class = None
+                rospy.logerror("Didn't find feedback message class for type " + self.feedback_type)
 
-        self._recursive_create_feedback_items(self.feedback, self.name + "/feedback", self.feedback_type,
+            self._recursive_create_feedback_items(self.feedback, self.name + "/feedback", self.feedback_type,
                                               getattr(self.feedback_message_instance, "feedback"))
 
         self.status = self.parent.add_object(ua.NodeId(self.name + "status", self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
@@ -145,12 +160,6 @@ class OpcUaROSAction:
                 self._feedback_nodes[feedback_topic_name] = new_node
         return
 
-    def get_msg_name(self):
-        return "_" + str(self.name.split("/")[-1]).capitalize() + "Action"
-
-    def get_goal_name(self):
-        return "_" + str(self.name.split("/")[-1]).capitalize() + "Goal"
-
     # namespace
     def get_ns_name(self):
         return str(self.name.split("/")[1])
@@ -220,12 +229,9 @@ def create_arg_array(types, goal_class):
                 arg.ArrayDimensions = []
                 arg.Description = ua.LocalizedText("Array")
             else:
-                arg = ua.Argument()
-                arg.Name = goal_class.__slots__[i]
-                arg.DataType = ua.NodeId(ros_services.getobjectidfromtype(actual_type))
-                arg.ValueRank = -1
-                arg.ArrayDimensions = []
-                arg.Description = ua.LocalizedText("Object")
+                 array_to_merge = create_arg_array(actual_type)
+                 rospy.loginfo("trying to create arg array for custom type: " + str(actual_type))
+                 array.extend(array_to_merge)
         i += 1
     return array
 
