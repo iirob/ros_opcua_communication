@@ -32,34 +32,86 @@ class OpcUaROSService:
         del self._eval_locals['__name__']
         del self._eval_locals['__doc__']
         # Build the Array of inputs
-        sample_req = self._class._request_class()
-        sample_resp = self._class._response_class()
-        inputs = getargarray(sample_req)
-        self.outputs = getargarray(sample_resp)
+        self.sample_req = self._class._request_class()
+        self.sample_resp = self._class._response_class()
+        inputs = getargarray(self.sample_req)
+        self.outputs = getargarray(self.sample_resp)
         self.method = self.parent.add_method(idx, self.name, self.call_service, inputs, self.outputs)
+	rospy.loginfo("Created ROS Service with name: %s", self.name)
 
-    
+	
+    @uamethod
     def call_service(self, parent, *inputs):
         try:
             rospy.loginfo("Calling Service with name: " + self.name)
-            response = self.proxy(*inputs)
-            rospy.loginfo("got response: " + str(response))
-            outputarray = filloutputarray(response)
-            if not (outputarray is None or len(outputarray) == 0):
-                return outputarray
-            else:
-                return
-        except (rospy.ROSException, common.uaerrors.UaErro, rosservice.ROSServiceException) as e:
+            input_msg = self.create_message_instance(inputs, self.sample_req)
+            rospy.logdebug("Created Input Request for Service " + self.name + " : " + str(input_msg))
+            response = self.proxy(input_msg)
+            rospy.logdebug("got response: " + str(response))
+            rospy.logdebug("Creating response message object")
+            return_values = []
+            for slot in response.__slots__:
+	      rospy.logdebug("Converting slot: " + str(getattr(response, slot)))
+	      return_values.append(getattr(response, slot))
+	      rospy.logdebug("Current Response list: " + str(return_values))
+            return return_values
+        except (TypeError, rospy.ROSException, rospy.ROSInternalException, rospy.ROSSerializationException, common.uaerrors.UaError, rosservice.ROSServiceException) as e:
             rospy.logerr("Error when calling service " + self.name, e)
-
+	
+    
+    def create_message_instance(self, inputs, sample):
+	rospy.logdebug("Creating message for goal call")
+	already_set = []
+	if isinstance(inputs, tuple):
+	  arg_counter = 0
+	  object_counter = 0
+	  while(arg_counter < len(inputs) and object_counter < len(sample.__slots__)):
+	   cur_arg = inputs[arg_counter]
+	   cur_slot = sample.__slots__[object_counter]
+	   real_slot = getattr(sample, cur_slot)
+	   rospy.logdebug("cur_arg: " + str(cur_arg) + " cur_slot_name: " + str(cur_slot) + " real slot content: " + str(real_slot)) 
+	   if hasattr(real_slot, '_type'):
+	     rospy.logdebug("We found an object with name " + str(cur_slot) + ", creating it recursively")
+	     already_set, arg_counter = self.create_object_instance(already_set, real_slot, cur_slot, arg_counter, inputs, sample)
+	     object_counter += 1
+	   else:
+	    already_set.append(cur_slot)
+	    #set the attribute in the request
+	    setattr(sample, cur_slot, cur_arg)
+	    arg_counter += 1
+	    object_counter += 1
+	    
+	return sample 
+      
+    def create_object_instance(self, already_set, object, name, counter, inputs, sample):
+	  rospy.loginfo("Create Object Instance Notify")
+	  object_counter = 0
+	  while(object_counter < len(object.__slots__) and counter < len(inputs)):
+	    cur_arg = inputs[counter]
+	    cur_slot = object.__slots__[object_counter]
+	    real_slot = getattr(object, cur_slot)
+	    rospy.loginfo("cur_arg: " + str(cur_arg) + " cur_slot_name: " + str(cur_slot) + " real slot content: " + str(real_slot)) 
+	    if hasattr(real_slot, '_type'):
+	      rospy.logdebug("Recursive Object found in request/response of service call")
+	      already_set, counter = self.create_object_instance(already_set, real_slot, cur_slot, counter, inputs, sample)
+	      object_counter += 1
+	    else:
+	       already_set.append(cur_slot)
+	       setattr(object, cur_slot, cur_arg)
+	       object_counter += 1
+	       counter += 1
+	  #sets the object as an attribute in the request were trying to build
+	  setattr(sample, name, object)
+	  return already_set, counter
+      
     def recursive_delete_items(self, item):
         self.proxy.close()
         for child in item.get_children():
             self.recursive_delete_items(child)
             if child in self._nodes:
                 del self._nodes[child]
-            self.server.delete_nodes([child])
-        self.server.delete_nodes([self.method])
+            self.server.server.delete_nodes([child])
+        self.server.server.delete_nodes([self.method])
         ros_server.own_rosnode_cleanup()
 
     def recursive_create_objects(self, name, idx, parent):
@@ -69,17 +121,19 @@ class OpcUaROSService:
         for name in hierachy:
             if name != '':
                 try:
-                    nodewithsamename = self.server.get_node(ua.NodeId(name, idx))
-                    if nodewithsamename is not None and nodewithsamename.get_parent() == parent:
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, nodewithsamename)
+                    nodewithsamename = self.server.find_service_node_with_same_name(name, idx)
+                    rospy.logdebug("nodewithsamename for name: "  + str(name) + " is : " + str(nodewithsamename))
+                    if nodewithsamename is not None:
+		      rospy.logdebug("recursive call for same name for: " + name)
+                      return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, nodewithsamename)
                     else:
                         newparent = parent.add_object(
-                            ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                            ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
                 except IndexError, common.uaerrors.UaError:
                     newparent = parent.add_object(
-                        ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                        ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                     return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
         return parent
@@ -98,7 +152,7 @@ def getargarray(sample_req):
                 arg.Name = slot_name
                 arg.DataType = ua.NodeId(getobjectidfromtype("array"))
                 arg.ValueRank = -1
-                arg.ArrayDimensions = []
+                arg.ArrayDimensions = [1]
                 arg.Description = ua.LocalizedText("Array")
             else:
                 arg = ua.Argument()
@@ -135,13 +189,12 @@ def refresh_services(namespace_ros, server, servicesdict, idx, services_object_o
             if service_nameOPC == rosservice_name:
                 found = True
         if not found and servicesdict[service_nameOPC] is not None:
-            servicesdict[service_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(service_nameOPC, idx)))
+            servicesdict[service_nameOPC].recursive_delete_items(server.server.get_node(ua.NodeId(service_nameOPC, idx)))
             tobedeleted.append(service_nameOPC)
         if len(servicesdict[service_nameOPC].parent.get_children()) == 0:
-            server.delete_nodes([servicesdict[service_nameOPC].parent])
+            server.server.delete_nodes([servicesdict[service_nameOPC].parent])
     for name in tobedeleted:
         del servicesdict[name]
-
 
 def getobjectidfromtype(type_name):
     if type_name == 'bool':
@@ -156,6 +209,7 @@ def getobjectidfromtype(type_name):
         dv = ua.ObjectIds.Byte
     elif type_name == 'int16':
         dv = ua.ObjectIds.Int16
+        rospy.roswarn("Int16??")
     elif type_name == 'uint16':
         dv = ua.ObjectIds.UInt16
     elif type_name == 'int32':
@@ -173,7 +227,7 @@ def getobjectidfromtype(type_name):
     elif type_name == 'string' or type_name == 'str':
         dv = ua.ObjectIds.String
     elif type_name == 'array':
-        dv = ua.ObjectIds.ArrayItemType
+        dv = ua.ObjectIds.Enumeration
     elif type_name == 'Time' or type_name == 'time':
         dv = ua.ObjectIds.Time
     else:
@@ -181,35 +235,3 @@ def getobjectidfromtype(type_name):
         return None
     return dv
 
-
-def filloutputarray(response):
-    rospy.logdebug("Filling OutputArray with: " + response)
-    outputs = []
-    counter = 0
-    for slot_name in response.__slots__:
-        slot = getattr(response, slot_name)
-        if hasattr(slot, '_type'):
-            slot_type = slot._type
-            array_to_merge = filloutputarray(slot)
-            outputs.extend(array_to_merge)
-
-        else:
-            if isinstance(slot, list):
-                output_arg = ua.Argument()
-                output_arg.Name = "Input Argument " + repr(counter)
-                output_arg.DataType = ua.NodeId(getobjectidfromtype("array"))
-                output_arg.ValueRank = -1
-                output_arg.ArrayDimensions = []
-                output_arg.Description = ua.LocalizedText("Array")
-            else:
-                rospy.logdebug("Output Value is a primitive: " + slot_name)
-                output_arg = ua.Argument()
-                output_arg.Name = slot_name
-                output_arg.DataType = ua.NodeId(getobjectidfromtype(type(slot)).__name__)
-                output_arg.ValueRank = -1
-                output_arg.ArrayDimensions = []
-                output_arg.Description = ua.LocalizedText(slot_name)
-        counter += 1
-        if output_arg is not None:
-            outputs.append(output_arg)
-    return outputs
