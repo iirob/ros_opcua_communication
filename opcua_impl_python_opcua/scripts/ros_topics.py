@@ -37,14 +37,14 @@ class OpcUaROSTopic:
 
         self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
         self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=1)
-	rospy.loginfo("Created ROS Topic with name: " + str(self.name))
-	
+        rospy.loginfo("Created ROS Topic with name: " + str(self.name))
+
     def _recursive_create_items(self, parent, idx, topic_name, type_name, message, top_level=False):
         topic_text = topic_name.split('/')[-1]
         if '[' in topic_text:
             topic_text = topic_text[topic_text.index('['):]
 
-        # This here are 'complex data'
+        # This here are 'complex datatypes'
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             complex_type = True
             new_node = parent.add_object(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
@@ -114,8 +114,8 @@ class OpcUaROSTopic:
                             base_type_str, _ = _extract_array_info(
                                 self._nodes[topic_name].text(self.type_name))
                             self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
-                                                     base_type_str,
-                                                     slot, None)
+                                                         base_type_str,
+                                                         slot, None)
             # remove obsolete children
             if topic_name in self._nodes:
                 if len(message) < len(self._nodes[topic_name].get_children()):
@@ -159,20 +159,24 @@ class OpcUaROSTopic:
                 try:
                     nodewithsamename = self.server.find_topics_node_with_same_name(name, idx)
                     if nodewithsamename is not None:
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, nodewithsamename)
+                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                                                             nodewithsamename)
                     else:
                         # if for some reason 2 services with exactly same name are created use hack>: add random int, prob to hit two
                         # same ints 1/10000, should be sufficient
                         newparent = parent.add_object(
                             ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
+                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                                                             newparent)
                 # thrown when node with parent name is not existent in server
                 except IndexError, common.UaError:
                     newparent = parent.add_object(
-                        ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                        ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
+                                  ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                    return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx, newparent)
+                    return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                                                         newparent)
 
         return parent
 
@@ -262,31 +266,32 @@ def numberofsubscribers(nametolookfor, topicsDict):
     return ret
 
 
-def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics, actions):
+def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics,
+                               actions):
     ros_topics = rospy.get_published_topics(namespace_ros)
     rospy.logdebug(str(ros_topics))
     rospy.logdebug(str(rospy.get_published_topics('/move_base_simple')))
     for topic_name, topic_type in ros_topics:
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
             if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
-		    rospy.logdebug("Found an action: " + str(topic_name))
-		    correct_name = ros_actions.get_correct_name(topic_name)
-                    if correct_name not in actionsdict:
-                        rospy.loginfo("Creating Action with name: " +  correct_name)
-                        try:
-                            actionsdict[correct_name] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
-                                                                                                           correct_name,
-                                                                                                           get_goal_type(correct_name),
-                                                                                                           get_feedback_type(
-                                                                                                               correct_name))
-                        except (ValueError, TypeError, AttributeError) as e:
-			    print(e)
-                            rospy.logerr("Error while creating Action Objects for Action " + topic_name)
+                rospy.logdebug("Found an action: " + str(topic_name))
+                correct_name = ros_actions.get_correct_name(topic_name)
+                if correct_name not in actionsdict:
+                    rospy.loginfo("Creating Action with name: " + correct_name)
+                    try:
+                        actionsdict[correct_name] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
+                                                                               correct_name,
+                                                                               get_goal_type(correct_name),
+                                                                               get_feedback_type(
+                                                                                   correct_name))
+                    except (ValueError, TypeError, AttributeError) as e:
+                        print(e)
+                        rospy.logerr("Error while creating Action Objects for Action " + topic_name)
 
             else:
-	       # rospy.loginfo("Ignoring normal topics for debugging...")
-               topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
-               topicsdict[topic_name] = topic
+                # rospy.loginfo("Ignoring normal topics for debugging...")
+                topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
+                topicsdict[topic_name] = topic
         elif numberofsubscribers(topic_name, topicsdict) <= 1 and "rosout" not in topic_name:
             topicsdict[topic_name].recursive_delete_items(server.server.get_node(ua.NodeId(topic_name, idx_topics)))
             del topicsdict[topic_name]
@@ -319,7 +324,8 @@ def get_feedback_type(action_name):
         except rospy.ROSException as e2:
             rospy.logerr("Couldnt find feedback type for action " + action_name, e2)
             return None
-	  
+
+
 def get_goal_type(action_name):
     try:
         type, name, fn = rostopic.get_topic_type(action_name + "/goal")
@@ -331,6 +337,3 @@ def get_goal_type(action_name):
         except rospy.ROSException as e2:
             rospy.logerr("Couldnt find feedback type for action " + action_name, e2)
             return None
-	  
-	 
-
