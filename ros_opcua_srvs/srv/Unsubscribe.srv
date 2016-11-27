@@ -1,0 +1,4 @@
+ros_opcua_msgs/Address node
+---
+bool success
+string error_message

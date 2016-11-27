@@ -1,0 +1,7 @@
+ros_opcua_msgs/Address node
+ros_opcua_msgs/Address method
+ros_opcua_msgs/TypeValue[] data
+---
+bool success
+string error_message
+ros_opcua_msgs/TypeValue[] data

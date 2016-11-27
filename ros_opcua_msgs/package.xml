@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>ros_opcua_msgs</name>
+  <version>0.2.0</version>
+  <description>The ros_opcua_msgs package implements ROS-messages for opcua_communication metapackage.</description>
+
+  <maintainer email="denis.stogl@kit.edu">Denis Štogl</maintainer>
+
+  <license>LGPLv3</license>
+
+  <url type="website">http://wiki.ros.org/ros_opcua_msgs</url>
+  <url type="repository">https://github.com/iirob/ros_opcua_communication</url>
+  <url type="bugtracker">https://github.com/iirob/ros_opcua_communication/issues</url>
+
+  <author email="denis.stogl@kit.edu">Denis Štogl</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <build_depend>message_generation</build_depend>
+  <depend>std_msgs</depend>
+  <exec_depend>message_runtime</exec_depend>
+
+</package>

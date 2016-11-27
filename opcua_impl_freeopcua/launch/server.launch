@@ -1,6 +1,0 @@
-<launch>
-
-    <node name="ros_opcua_server" pkg="opcua_impl_freeopcua" type="ros_server.py" output="screen">
-    </node>
-
-</launch>

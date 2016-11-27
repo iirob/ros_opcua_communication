@@ -1,0 +1,9 @@
+<launch>
+
+    <arg name="namespace" default="opcua"/>
+    <arg name="node_name" default="opcua_client"/>
+
+    <node ns="$(arg namespace)" name="$(arg node_name)" pkg="ros_opcua_impl_freeopcua" type="client_node" output="screen">
+    </node>
+
+</launch>

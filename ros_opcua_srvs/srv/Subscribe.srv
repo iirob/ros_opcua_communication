@@ -1,0 +1,5 @@
+ros_opcua_msgs/Address node
+string callback_topic
+---
+bool success
+string error_message

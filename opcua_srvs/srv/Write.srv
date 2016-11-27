@@ -1,5 +1,0 @@
-opcua_msgs/Address node
-opcua_msgs/TypeValue data
----
-bool success
-string error_message

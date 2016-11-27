@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>ros_opcua_communication</name>
+  <version>0.2.0</version>
+  <description>The ros_opcua_communication mate-package are ROS bidings for different open-source OPC-UA implementations. Following libraries are used FreeOpcUa, open62541.</description>
+
+  <maintainer email="denis.stogl@kit.edu">Denis Štogl</maintainer>
+
+  <license>LGPLv3</license>
+
+  <url type="website">http://wiki.ros.org/ros_opcua_communication</url>
+  <url type="repository">https://github.com/iirob/ros_opcua_communication</url>
+  <url type="bugtracker">https://github.com/iirob/ros_opcua_communication/issues</url>
+
+  <author email="denis.stogl@kit.edu">Denis Štogl</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>ros_opcua_msgs</exec_depend>
+  <exec_depend>ros_opcua_srvs</exec_depend>
+  <exec_depend>ros_opcua_impl_freeopcua</exec_depend>
+  <exec_depend>ros_opcua_impl_python_opcua</exec_depend>
+
+  <export>
+    <metapackage/>
+  </export>
+</package>
