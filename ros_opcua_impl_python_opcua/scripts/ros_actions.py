@@ -8,7 +8,7 @@ import roslib
 import rospy
 from opcua import ua, common
 from opcua import uamethod
-from opcua.common.uaerrors import UaError
+from opcua.ua.uaerrors import UaError
 from roslib import message
 
 import ros_server
