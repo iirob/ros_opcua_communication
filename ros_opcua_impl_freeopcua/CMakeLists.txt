@@ -40,10 +40,6 @@ add_executable(client_node src/opcua_client.cpp)
 add_dependencies(client_node ros_opcua_msgs_generate_messages_cpp ros_opcua_srvs_generate_messages_cpp)
 target_link_libraries(client_node ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${FreeOpcUa_LIBRARIES})
 
-add_executable(variprog_opcua_client src/variprog_opcua_client.cpp)
-add_dependencies(variprog_opcua_client ros_opcua_msgs_generate_messages_cpp ros_opcua_srvs_generate_messages_cpp)
-target_link_libraries(variprog_opcua_client ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${FreeOpcUa_LIBRARIES})
-
 #############
 ## Install ##
 #############
