@@ -2,7 +2,7 @@
 <package format="2">
   <name>ros_opcua_communication</name>
   <version>0.2.0</version>
-  <description>The ros_opcua_communication mate-package are ROS bidings for different open-source OPC-UA implementations. Following libraries are used FreeOpcUa, open62541.</description>
+  <description>The ros_opcua_communication mate-package are ROS bidings for different open-source OPC-UA implementations. Currently following libraries are supported: FreeOpcUa and python-opcua.</description>
 
   <maintainer email="denis.stogl@kit.edu">Denis Štogl</maintainer>
 
