@@ -1,6 +1,6 @@
 [submodule "ros_opcua_impl_freeopcua/freeopcua"]
 	path = ros_opcua_impl_freeopcua/freeopcua
-	url = git@github.com:iirob/freeopcua.git
+	url = https://github.com/FreeOpcUa/freeopcua.git
 [submodule "ros_opcua_impl_python_opcua/python-opcua"]
 	path = ros_opcua_impl_python_opcua/python-opcua
 	url = https://github.com/FreeOpcUa/python-opcua.git
