@@ -102,9 +102,9 @@ bool connect(ros_opcua_srvs::Connect::Request &req, ros_opcua_srvs::Connect::Res
         ROS_ERROR("OPC-UA client node %s: Connection to OPC-UA server on address %s failed! Message: %s", ros::this_node::getName().c_str(), req.endpoint.c_str(), exc.what());
 
         res.success = false;
-        char err_string[100];
-        sprintf(err_string, "Connection to OPC-UA server on address %s failed! Message: %s", req.endpoint.c_str(), exc.what());
-        res.error_message = err_string;
+        std::stringstream ss;
+        ss << "Connection to OPC-UA server on address " << req.endpoint << " failed! Message: " << exc.what();
+        res.error_message = ss.str();
     }
     catch (...) {
         ROS_ERROR("Connection to OPC-UA server on address %s failed with unknown exception", req.endpoint.c_str());
@@ -133,9 +133,8 @@ bool disconnect(ros_opcua_srvs::Disconnect::Request &req, ros_opcua_srvs::Discon
         ROS_ERROR("OPC-UA client node %s: Disconnection failed! (maybe client was not connected before?). Message: %s", ros::this_node::getName().c_str(), exc.what());
 
         res.success = false;
-        char err_string[100];
-        sprintf(err_string, "Dissconect service failed with exception: %s", exc.what());
-        res.error_message = err_string;
+        res.error_message = "Disconect service failed with exception: ";
+        res.error_message.append(exc.what());
     }
     catch (...) {
         ROS_ERROR("'Disconnect' service failed with unknown exception");
@@ -176,9 +175,8 @@ bool list_node(ros_opcua_srvs::ListNode::Request &req, ros_opcua_srvs::ListNode:
             ROS_ERROR("OPC-UA client node %s: 'ListNode' service called with node Id: %s, parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.nodeId.c_str(), exc.what());
 
             res.success = false;
-            char err_string[100];
-            sprintf(err_string, "ListNode service failed with exception: %s", exc.what());
-            res.error_message = err_string;
+            res.error_message = "ListNode service failed with exception: ";
+            res.error_message.append(exc.what());
         }
         catch (...)
         {
@@ -218,9 +216,8 @@ convertTypeValueToVariant(typeValue).ToString() << std::endl;
         ROS_ERROR("OPC-UA client node %s: 'CallMethod' service called with node Id: %s and %s parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.nodeId.c_str(), req.method.nodeId.c_str(), exc.what());
 
         res.success = false;
-        char err_string[100];
-        sprintf(err_string, "Call method service failed with exception: %s", exc.what());
-        res.error_message = err_string;
+        res.error_message = "Call method service failed with exception: ";
+        res.error_message.append(exc.what());
     }
     catch (...)
     {
@@ -250,9 +247,7 @@ bool read(ros_opcua_srvs::Read::Request &req, ros_opcua_srvs::Read::Response &re
 
         if (res.data.type == "Unknown") {
             res.success = false;
-            char err_string[100];
-            sprintf(err_string, "Unknon data type!!");
-            res.error_message = err_string;
+            res.error_message = "Unknown data type!!";
             ROS_DEBUG("Reading failed!");
         }
     }
@@ -260,9 +255,8 @@ bool read(ros_opcua_srvs::Read::Request &req, ros_opcua_srvs::Read::Response &re
         ROS_ERROR("OPC-UA client node %s: 'Read' service called with node Id: %s, parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.nodeId.c_str(), exc.what());
 
         res.success = false;
-        char err_string[100];
-        sprintf(err_string, "Read service failed with exception: %s", exc.what());
-        res.error_message = err_string;
+        res.error_message = "Read service failed with exception: ";
+        res.error_message.append(exc.what());
     }
     catch (...)
     {
@@ -300,9 +294,8 @@ bool write(ros_opcua_srvs::Write::Request &req, ros_opcua_srvs::Write::Response 
         }
         else {
             res.success = false;
-            char err_string[100];
-            sprintf(err_string, "Unknon data type %s", req.data.type.c_str());
-            res.error_message = err_string;
+            res.error_message = "Unknown data type: ";
+            res.error_message.append(req.data.type);
             ROS_DEBUG("Writing failed!");
         }
     }
@@ -310,9 +303,8 @@ bool write(ros_opcua_srvs::Write::Request &req, ros_opcua_srvs::Write::Response 
         ROS_ERROR("OPC-UA client node %s: 'Write' service called with node Id: %s, type: '%s' parameters failed! Exception: %s", ros::this_node::getName().c_str(), req.node.nodeId.c_str(), req.data.type.c_str(), exc.what());
 
         res.success = false;
-	char err_string[100];
-	sprintf(err_string, "Write service failed with exception: %s", exc.what());
-	res.error_message = err_string;
+        res.error_message = "Write service failed with exception: ";
+        res.error_message.append(exc.what());
     }
     catch (...)
     {
@@ -355,9 +347,8 @@ bool subscribe(ros_opcua_srvs::Subscribe::Request &req, ros_opcua_srvs::Subscrib
         ROS_ERROR("OPC-UA client node %s: 'Subscribe' service called with node Id: %s parameters failed!", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
 
         res.success = false;
-        char err_string[100];
-        sprintf(err_string, "Subscribe service failed with exception: %s", exc.what());
-        res.error_message = err_string;
+        res.error_message = "Subscribe service failed with exception: ";
+        res.error_message.append(exc.what());
     }
     catch (...)
     {
@@ -402,9 +393,8 @@ bool unsubscribe(ros_opcua_srvs::Unsubscribe::Request &req, ros_opcua_srvs::Unsu
        ROS_ERROR("OPC-UA client node %s: 'Unsubscribe' service called with node Id: %s parameters failed!", ros::this_node::getName().c_str(), req.node.nodeId.c_str());
 
         res.success = false;
-        char err_string[100];
-        sprintf(err_string, "Unsubscribe service failed with exception: %s", exc.what());
-        res.error_message = err_string;
+        res.error_message = "Unsubscribe service failed with exception: ";
+        res.error_message.append(exc.what());
     }
     catch (...)
     {

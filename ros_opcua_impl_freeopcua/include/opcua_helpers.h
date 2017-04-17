@@ -170,10 +170,10 @@ ros_opcua_msgs::TypeValue convertVariantToTypeValue(const OpcUa::Variant& varian
     else if (typeValue.type == "uint64") {
         typeValue.uint64_d = (uint64_t)variant;
     }
-    else if (typeValue.type == "float") {
+    else if (typeValue.type == "float" || typeValue.type == "float32") {
         typeValue.float_d = (float)variant;
     }
-    else if (typeValue.type == "double") {
+    else if (typeValue.type == "double" || typeValue.type == "float64") {
         typeValue.double_d = (double)variant;
     }
     else if (typeValue.type == "string") {
@@ -222,10 +222,10 @@ OpcUa::Variant convertTypeValueToVariant(ros_opcua_msgs::TypeValue& typeValue)
     else if (typeValue.type == "uint64") {
         variant = typeValue.uint64_d;
     }
-    else if (typeValue.type == "float") {
+    else if (typeValue.type == "float" || typeValue.type == "float32") {
         variant = typeValue.float_d;
     }
-    else if (typeValue.type == "double") {
+    else if (typeValue.type == "double" || typeValue.type == "float64") {
         variant = typeValue.double_d;
     }
     else if (typeValue.type == "string") {
