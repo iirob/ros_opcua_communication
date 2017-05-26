@@ -9,8 +9,9 @@ notifications:
     on_failure: always
 env:
   global:
-    - BEFORE_SCRIPT=.travis.before.bash
+    #- BEFORE_SCRIPT=.travis.before.bash
     - VERBOSE_OUTPUT=true
+    - export PYTHONPATH=$PWD/ros_opcua_impl_python_opcua/python-opcua:$PYTHONPATH
   matrix:
     - ROS_DISTRO="indigo" ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu
 #    - ROS_DISTRO="kinetic" ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu
