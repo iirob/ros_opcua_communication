@@ -9,7 +9,6 @@ notifications:
     on_failure: always
 env:
   global:
-    #- BEFORE_SCRIPT=.travis.before.bash
     - VERBOSE_OUTPUT=true
     - export PYTHONPATH=$PWD/ros_opcua_impl_python_opcua/python-opcua:$PYTHONPATH
   matrix:
