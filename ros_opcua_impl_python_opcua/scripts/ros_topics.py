@@ -277,13 +277,14 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                 rospy.logdebug("Found an action: " + str(topic_name))
                 correct_name = ros_actions.get_correct_name(topic_name)
                 if correct_name not in actionsdict:
-                    rospy.loginfo("Creating Action with name: " + correct_name)
                     try:
-                        actionsdict[correct_name] = ros_actions.OpcUaROSAction(server, actions, idx_actions,
+                        rospy.loginfo("Creating Action with name: " + correct_name)
+                        actionsdict[correct_name] = ros_actions.OpcUaROSAction(server,
+                                                                               actions,
+                                                                               idx_actions,
                                                                                correct_name,
                                                                                get_goal_type(correct_name),
-                                                                               get_feedback_type(
-                                                                                   correct_name))
+                                                                               get_feedback_type(correct_name))
                     except (ValueError, TypeError, AttributeError) as e:
                         print(e)
                         rospy.logerr("Error while creating Action Objects for Action " + topic_name)
