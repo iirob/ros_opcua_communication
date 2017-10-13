@@ -10,11 +10,9 @@ from opcua import Server, ua
 import ros_services
 import ros_topics
 import ros_messages
-import ros_global
-from opcua.common.ua_utils import get_nodes_of_namespace
-from opcua.common.instantiate import instantiate
 
 
+rosserver =  10
 # Returns the hierachy as one string from the first remaining part on.
 def nextname(hierachy, index_of_last_processed):
     try:
@@ -42,15 +40,14 @@ class ROSServer:
         self.topicsDict = {}
         self.servicesDict = {}
         self.actionsDict = {}
+        self.messagesDict = {}
         rospy.init_node("rosopcua")
         self.server = Server()
         self.server.set_endpoint("opc.tcp://0.0.0.0:21554/")
         self.server.set_server_name("ROS ua Server")
         self.server.start()
-
         # setup our own namespaces, this is expected
         uri_topics = "http://ros.org/topics"
-
         # two different namespaces to make getting the correct node easier for get_node (otherwise had object for service and topic with same name
         uri_services = "http://ros.org/services"
         uri_actions = "http://ros.org/actions"
@@ -58,35 +55,21 @@ class ROSServer:
         idx_topics = self.server.register_namespace(uri_topics)
         idx_services = self.server.register_namespace(uri_services)
         idx_actions = self.server.register_namespace(uri_actions)
-        #idx_messages = self.server.register_namespace(uri_messages)
-
+        idx_messages = self.server.register_namespace(uri_messages)
         # get Objects node, this is where we should put our custom stuff
         objects = self.server.get_objects_node()
+        object_type = self.server.get_root_node().get_child(["0:Types", "0:ObjectTypes", "0:BaseObjectType"])
+        message_object_type = object_type.add_object_type(idx_messages, "MessageObjectType")
+
         # one object per type we are watching
-        topics_object   = objects.add_object(idx_topics  , "ROS-Topics")
+        topics_object = objects.add_object(idx_topics, "ROS-Topics")
         services_object = objects.add_object(idx_services, "ROS-Services")
-        actions_object  = objects.add_object(idx_actions , "ROS_Actions")
-        messages_object = objects.add_object(idx_actions , "ROS_Messages")
+        actions_object = objects.add_object(idx_actions, "ROS_Actions")
 
-        # import message in message space
-        print "---- message import started ----"
-        self.server.import_xml(ros_global.messageExportPath)
-        print "---- message  imported ----"
-
-        imported_node = []
-        idx_messages   = self.server.get_namespace_index(uri_messages)
-        imported_node = get_nodes_of_namespace(self.server, [idx_messages])
-
-        for node in imported_node:
-            identifier  = str(node.nodeid.Identifier)
-            if node.get_node_class() == ua.NodeClass.VariableType: #only for VariableType, check if the identifier ends with 'Type' (not 'DataType' ->  DataType )
-                instantiate( messages_object,
-                             node,
-                             dname = ua.LocalizedText(identifier.replace('Type','')),
-                             idx=idx_messages)
-                # save node in a List/Array
-                message_typ = identifier.replace('Type', '')
-                ros_global.messageNode[message_typ] = node
+        self.server.delete_nodes()
+        for message in ros_messages._get_ros_msg():
+            opcua_ros_message = ros_messages.OpcUaROSMessage(self, message_object_type, idx_messages, message.split()[0], message.split()[1])
+            opcua_ros_message.recursive_create_items(opcua_ros_message.parent, opcua_ros_message.idx, opcua_ros_message.message)
 
         while not rospy.is_shutdown():
             # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
@@ -94,8 +77,7 @@ class ROSServer:
             ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict,
                                                   idx_topics, idx_actions, topics_object, actions_object)
             # Don't clog cpu
-            time.sleep(10)
-            #time.sleep(60)
+            time.sleep(60)
         self.server.stop()
         quit()
 

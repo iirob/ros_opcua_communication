@@ -1,5 +1,5 @@
 <launch>
-    <node name="rosopcua" pkg="ros_opcua_impl_python_opcua" type="ros_server.py" output="screen">
+    <node name="rosopcua" pkg="ros_opcua_impl_python_opcua" type="ros_server_to_export_message.py" output="screen">
         <rosparam command="load" file="$(find ros_opcua_impl_python_opcua)/config/params.yaml"/>
     </node>
 </launch>

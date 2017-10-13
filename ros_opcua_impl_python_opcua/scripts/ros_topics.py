@@ -13,6 +13,11 @@ from opcua import ua, uamethod
 import ros_actions
 import ros_server
 import rostopic
+import ros_global
+import ros_messages
+from opcua.common.instantiate  import instantiate
+
+
 
 
 class OpcUaROSTopic:
@@ -40,10 +45,30 @@ class OpcUaROSTopic:
         rospy.loginfo("Created ROS Topic with name: " + str(self.name))
 
     def _recursive_create_items(self, parent, idx, topic_name, type_name, message, top_level=False):
+
         topic_text = topic_name.split('/')[-1]
         if '[' in topic_text:
             topic_text = topic_text[topic_text.index('['):]
 
+
+
+        #get variable typpe with the topic type
+        variable_typ_node = ros_global.messageNode[type_name]
+
+        #create a new instance of  variabletype and  add to name space or topics node in namespace
+        new_variable_node = instantiate( parent,
+                                         variable_typ_node,
+                                         dname = ua.LocalizedText(topic_name),
+                                         idx=self.idx)[0]
+
+        #save  the new instance in  topic array
+        ros_global.topicNode[topic_name] = new_variable_node
+        self._nodes[topic_name] = new_variable_node
+        #self._nodes[topic_name].set_writable(True)
+
+
+
+        """
         # This here are 'complex datatypes'
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             complex_type = True
@@ -77,10 +102,12 @@ class OpcUaROSTopic:
 
         if topic_name in self._nodes and self._nodes[topic_name].get_node_class() == ua.NodeClass.Variable:
             self._nodes[topic_name].set_writable(True)
-        return
+        return#
+        """
 
     def message_callback(self, message):
         self.update_value(self.name, message)
+
 
     @uamethod
     def opcua_update_callback(self, parent):
@@ -100,6 +127,17 @@ class OpcUaROSTopic:
             self.server.server.delete_nodes([self.parent])
 
     def update_value(self, topic_name, message):
+
+        # check if exits
+        # get topic node
+        
+        if topic_name in ros_global.topicNode.keys() :
+            topic_node = ros_global.topicNode[topic_name]
+            ros_messages.update_node_with_message(topic_node, message)
+        else :
+            print "No found"
+
+        """
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             for slot_name in message.__slots__:
                 self.update_value(topic_name + '/' + slot_name, getattr(message, slot_name))
@@ -126,6 +164,15 @@ class OpcUaROSTopic:
         else:
             if topic_name in self._nodes and self._nodes[topic_name] is not None:
                 self._nodes[topic_name].set_value(repr(message))
+        """
+
+    """
+    def get_ros_message_typ(self, message):
+        if not (message.__class__.__module__  == "__builtin__") :
+            package    = message.__class__.__module__.split('.')[0]
+            class_name = message.__class__.__name__
+        return package+"/"+class_name
+    """
 
     def recursive_delete_items(self, item):
         self._publisher.unregister()
