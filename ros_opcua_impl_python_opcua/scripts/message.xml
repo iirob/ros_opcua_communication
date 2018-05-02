@@ -10566,7 +10566,7 @@
       <Reference ReferenceType="HasTypeDefinition">ns=1;s=geometry_msgs/AccelWithCovarianceType</Reference>
     </References>
   </UAVariable>
-  <UAVariableType BrowseName="1:AnalogType" DataType="ns=2;s=ur_msgs/AnalogDataType" NodeId="ns=1;s=ur_msgs/AnalogType" ValueRank="0">
+  <UAVariableType BrowseName="1:AnalogType" DataType="ns=2;s=ur_msgs/AnalogDataType" NodeId="ns=1;s=ur_msgs/AnalogType" ValueRank="1">
     <DisplayName>AnalogType</DisplayName>
     <Description>AnalogType</Description>
     <References>

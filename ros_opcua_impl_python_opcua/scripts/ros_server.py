@@ -35,7 +35,6 @@ def own_rosnode_cleanup():
         # noinspection PyTypeChecker
         rosnode.cleanup_master_blacklist(master, unpinged)
 
-
 class ROSServer:
     def __init__(self):
         self.namespace_ros = rospy.get_param("/rosopcua/namespace")
@@ -47,6 +46,7 @@ class ROSServer:
         self.server.set_endpoint("opc.tcp://0.0.0.0:21554/")
         self.server.set_server_name("ROS ua Server")
         self.server.start()
+        self.subscription = None
 
         # setup our own namespaces, this is expected
         uri_topics = "http://ros.org/topics"
@@ -88,14 +88,17 @@ class ROSServer:
                 message_typ = identifier.replace('Type', '')
                 ros_global.messageNode[message_typ] = node
 
+        # create subscription to handle write update event in namespace, when a variable is edited in client for example and new message have to be published
+        handler = SubHandler()
+        self.subscription = self.server.create_subscription(100, handler)
+
         while not rospy.is_shutdown():
             # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
             ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, idx_services, services_object)
             ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict,
                                                   idx_topics, idx_actions, topics_object, actions_object)
             # Don't clog cpu
-            time.sleep(10)
-            #time.sleep(60)
+            time.sleep(60)
         self.server.stop()
         quit()
 
@@ -124,8 +127,18 @@ class ROSServer:
             if self.actionsDict[topic].parent.nodeid.Identifier == name:
                 rospy.logdebug("Found match for name: " + name)
                 return self.actionsDict[topic].parent
+
         return None
 
+class SubHandler(object):#
+    """
+        This Handle variable node (Topics)  update/edit.
+        When a variable node (Topics) is in client edited and  in namespace  edited,  the changed topics has to been republished
+    """
+    def event_notification(self, event) :
+        print " a variable node has been edited/updated "
+        print event
+        #  here most a topic published
 
 def main(args):
     global rosserver

@@ -12,6 +12,8 @@ import rosservice
 from opcua import ua, uamethod, common
 
 import ros_server
+import ros_messages
+import ros_global
 
 
 class OpcUaROSService:
@@ -150,9 +152,9 @@ class OpcUaROSService:
 
 def getargarray(sample_req):
     array = []
-    for slot_name in sample_req.__slots__:
+    for slot_name, type_name_child in zip(sample_req.__slots__, sample_req._slot_types):
         slot = getattr(sample_req, slot_name)
-        if hasattr(slot, '_type'):
+        if hasattr(slot, '_type'): # clearly not needed
             array_to_merge = getargarray(slot)
             array.extend(array_to_merge)
         else:
@@ -160,7 +162,7 @@ def getargarray(sample_req):
                 arg = ua.Argument()
                 arg.Name = slot_name
                 arg.DataType = ua.NodeId(getobjectidfromtype("array"))
-                arg.ValueRank = -1
+                arg.ValueRank = 1
                 arg.ArrayDimensions = [1]
                 arg.Description = ua.LocalizedText("Array")
             else:

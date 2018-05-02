@@ -8,7 +8,9 @@ from subprocess import Popen, PIPE
 import os
 from datetime import datetime
 import ros_global
-from opcua.common.instantiate_ros_opcua_node import instantiate
+from opcua.common.instantiate import instantiate
+from opcua.common import ua_utils
+
 
 
 
@@ -133,7 +135,6 @@ def _get_ros_msg():
     out, err = p.communicate()
     msg_list = out.split()
     #msg_list = ['geometry_msgs/Vector3', 'geometry_msgs/Twist', 'rosgraph_msgs/Log','std_msgs/String']
-    #print(msg_list);
     return msg_list
 
 def _create_node_with_type(parent, package, message_name, type_name, array_size, property = True):
@@ -185,7 +186,6 @@ def _create_node_with_type(parent, package, message_name, type_name, array_size,
                                    ua.QualifiedName(message_name.split('/')[-1], parent.nodeid.NamespaceIndex),
                                    dv.Value)
 
-
     # if is a array
     if array_size is not None:
         node.set_value_rank(1) # is a array
@@ -221,30 +221,98 @@ def _getOrAddNewNodeVariableTypeRelatedToAMessage(message, server, idx) :
     return node
 
 
-def update_node_with_message ( node, message) :
+def update_node_with_message ( node, message, idx) :
     """
     the method update all variable of a node or copy all  value from message to node
     IMPORT: the variable browser name of the variable node most be the same as the attribute of the message object
     """
-
     value = message
     # set value if exists
     if value is not None:
-        if not (hasattr(value, '__slots__') or type(value) in (list, tuple)):  # complex type
+        if not (hasattr(value, '__slots__') or type(value) in (list, tuple)):  # PRIMITIVE TYPE
             node.set_value(value)
         elif type(value) in (list, tuple):  # handle array
-            node.set_value(str(value))
-        else:
-            node.set_value(str(value))
+            if len(value) > 0:
+                node.set_value(value)
+        else: # complex type
+            if  type(message).__name__ == 'Time' or type(message).__name__ == 'Duration':
+                value = message.secs
+                node.set_value(value)
+                #node.set_value(str(value))
+            else:
+                node.set_value(str(value))
 
     node_children   =  node.get_children()
     for child in  node_children :
         # if child a variable
         if child.get_node_class() == ua.NodeClass.Variable :
+            # get attr_name
             if hasattr(value, child.get_browse_name().Name):
-                update_node_with_message(child,  getattr(value, child.get_browse_name().Name) )
+                update_node_with_message(child,  getattr(value, child.get_browse_name().Name), idx)
 
 
 
 
+def instantiate_custumizate (parent, node_type, nodeid=None, bname=None, dname=None, idx=0) :
+    nodes = instantiate(parent, node_type, nodeid=nodeid, bname=bname, dname=dname, idx=idx)
+    new_node = nodes[0]
+    init_recursiv_node(new_node, idx)
+    return new_node
 
+
+def init_recursiv_node (node, idx) :
+    """ this function  initiate all the sub variable with complex type of customized typep of the node """
+    children = node.get_children ()
+    if len(children) > 0 :
+        for child in children :
+            if child.get_node_class() == ua.NodeClass.Variable :
+                if  child.get_type_definition().NodeIdType == ua.NodeIdType.String : # complex type orcustomazed type
+                    variable_type_name = child.get_type_definition ().Identifier.replace('Type', '')
+                    if variable_type_name in ros_global.messageNode.keys() :
+                        variable_type = ros_global.messageNode[variable_type_name]
+                        created_node = instantiate(  node,
+                                         variable_type,
+                                         bname = child.get_browse_name(),
+                                         dname = child.get_display_name(),
+                                         idx=idx)[0]
+                        init_recursiv_node(created_node, idx)
+                        child.delete()
+
+
+
+def  update_message_instance_with_node (message, node) :
+    """ the function try to update  all message attribute with the help of node infos. NB: alls  node variable browsename  most be the same name als the the message attribute """
+    variables  = node.get_children( nodeclassmask=ua.NodeClass.Variable)
+
+    if len(variables) > 0 :
+        for var in variables:
+            attr_name = var.get_browse_name().Name
+            if hasattr(message, attr_name):
+                if len(var.get_children( nodeclassmask=ua.NodeClass.Variable)) == 0: # primitive type
+                    setattr(message, attr_name, correct_type(var, type(getattr(message,attr_name))))#var.get_value())
+                    #setattr(message, attr_name, var.get_value())
+                else :     # complex type
+                   update_message_instance_with_node(getattr(message, attr_name), var)
+
+    return message
+    # if has variables recursion
+    # else  update value
+
+
+def correct_type(node, typemessage):
+    data_value = node.get_data_value()
+    result = node.get_value()
+    if isinstance(data_value, ua.DataValue):
+        if typemessage.__name__ == "float":
+            result = float(result)
+        if typemessage.__name__ == "double":
+            result = float(result)
+        if typemessage.__name__ == "int":
+            result = int(result) & 0xff
+        if  typemessage.__name__ == "Time" or typemessage.__name__ == "Duration":
+            result = rospy.Time(result)
+
+    else:
+        rospy.logerr("can't convert: " + str(node.get_data_value.Value))
+        return None
+    return result
