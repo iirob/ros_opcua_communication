@@ -15,13 +15,13 @@ from opcua.common.ua_utils import get_nodes_of_namespace
 from opcua.common.instantiate import instantiate
 
 
-# Returns the hierachy as one string from the first remaining part on.
-def nextname(hierachy, index_of_last_processed):
+# Returns the hierarchy as one string from the first remaining part on.
+def nextname(hierarchy, index_of_last_processed):
     try:
         output = ""
         counter = index_of_last_processed + 1
-        while counter < len(hierachy):
-            output += hierachy[counter]
+        while counter < len(hierarchy):
+            output += hierarchy[counter]
             counter += 1
         return output
     except Exception as e:
@@ -34,6 +34,7 @@ def own_rosnode_cleanup():
         master = rosgraph.Master(rosnode.ID)
         # noinspection PyTypeChecker
         rosnode.cleanup_master_blacklist(master, unpinged)
+
 
 class ROSServer:
     def __init__(self):
@@ -51,14 +52,15 @@ class ROSServer:
         # setup our own namespaces, this is expected
         uri_topics = "http://ros.org/topics"
 
-        # two different namespaces to make getting the correct node easier for get_node (otherwise had object for service and topic with same name
+        # two different namespaces to make getting the correct node easier for get_node
+        # otherwise had object for service and topic with same name
         uri_services = "http://ros.org/services"
         uri_actions = "http://ros.org/actions"
         uri_messages = "http://ros.org/messages"
         idx_topics = self.server.register_namespace(uri_topics)
         idx_services = self.server.register_namespace(uri_services)
         idx_actions = self.server.register_namespace(uri_actions)
-        #idx_messages = self.server.register_namespace(uri_messages)
+        # idx_messages = self.server.register_namespace(uri_messages)
 
         # get Objects node, this is where we should put our custom stuff
         objects = self.server.get_objects_node()
@@ -74,21 +76,23 @@ class ROSServer:
         print "---- message  imported ----"
 
         imported_node = []
-        idx_messages   = self.server.get_namespace_index(uri_messages)
+        idx_messages = self.server.get_namespace_index(uri_messages)
         imported_node = get_nodes_of_namespace(self.server, [idx_messages])
 
         for node in imported_node:
             identifier  = str(node.nodeid.Identifier)
-            if node.get_node_class() == ua.NodeClass.VariableType: #only for VariableType, check if the identifier ends with 'Type' (not 'DataType' ->  DataType )
-                instantiate( messages_object,
-                             node,
-                             dname = ua.LocalizedText(identifier.replace('Type','')),
-                             idx=idx_messages)
+            # only for VariableType, check if the identifier ends with 'Type' (not 'DataType' ->  DataType )
+            if node.get_node_class() == ua.NodeClass.VariableType:
+                instantiate(messages_object,
+                            node,
+                            dname = ua.LocalizedText(identifier.replace('Type','')),
+                            idx=idx_messages)
                 # save node in a List/Array
                 message_typ = identifier.replace('Type', '')
                 ros_global.messageNode[message_typ] = node
 
-        # create subscription to handle write update event in namespace, when a variable is edited in client for example and new message have to be published
+        # create subscription to handle write update event in namespace,
+        # when a variable is edited in client for example and new message have to be published
         handler = SubHandler()
         self.subscription = self.server.create_subscription(100, handler)
 
@@ -130,15 +134,19 @@ class ROSServer:
 
         return None
 
-class SubHandler(object):#
+
+class SubHandler(object):
     """
-        This Handle variable node (Topics)  update/edit.
-        When a variable node (Topics) is in client edited and  in namespace  edited,  the changed topics has to been republished
+        This Handle variable node (Topics) update/edit.
+        When a variable node (Topics) is in client edited and  in namespace edited,
+        the changed topics has to been republished
     """
-    def event_notification(self, event) :
+
+    def event_notification(self, event):
         print " a variable node has been edited/updated "
         print event
-        #  here most a topic published
+        # here most a topic published
+
 
 def main(args):
     global rosserver

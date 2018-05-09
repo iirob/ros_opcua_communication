@@ -1,5 +1,8 @@
 # !/usr/bin/python
-# thanks to https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_action/src/rqt_action/action_plugin.py
+
+# Thanks to
+# https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_action/src/rqt_action/action_plugin.py
+
 import random
 from pydoc import locate
 
@@ -242,7 +245,7 @@ class OpcUaROSAction:
                     setattr(header, "frame_id", "map")
                     setattr(target_pose, "header", header)
                 except AttributeError as e:
-                    rospy.logerr("Error occured when setting frame_id", e)
+                    rospy.logerr("Error occurred when setting frame_id", e)
             rospy.loginfo("Created Message Instance for goal-send: " + str(goal_msg))
             self.client.send_goal(goal_msg, done_cb=self.update_result, feedback_cb=self.update_feedback,
                                   active_cb=self.update_state)
@@ -393,41 +396,53 @@ def getargarray(goal_class):
 
 
 def map_status_to_string(param):
-    if param == 9:
-        return "Goal LOST"
-    elif param == 8:
-        return "Goal RECALLED"
-    elif param == 7:
-        return "Goal RECALLING"
-    elif param == 6:
-        return "Goal PREEMPTING"
-    elif param == 5:
-        return "Goal REJECTED"
-    elif param == 4:
-        return "Goal ABORTED"
-    elif param == 3:
-        return "Goal SUCEEDED"
-    elif param == 2:
-        return "Goal PREEMPTED"
-    elif param == 1:
-        return "Goal ACTIVE"
-    elif param == 0:
-        return "Goal PENDING"
+    status_string = {9: "Goal LOST",
+                     8: "Goal RECALLED",
+                     7: "Goal RECALLING",
+                     6: "Goal PREEMPTING",
+                     5: "Goal REJECTED",
+                     4: "Goal ABORTED",
+                     3: "Goal SUCCEEDED",
+                     2: "Goal PREEMPTED",
+                     1: "Goal ACTIVE",
+                     0: "Goal PENDING"}
+    return status_string[param]
+
+    # if param == 9:
+    #     return "Goal LOST"
+    # elif param == 8:
+    #     return "Goal RECALLED"
+    # elif param == 7:
+    #     return "Goal RECALLING"
+    # elif param == 6:
+    #     return "Goal PREEMPTING"
+    # elif param == 5:
+    #     return "Goal REJECTED"
+    # elif param == 4:
+    #     return "Goal ABORTED"
+    # elif param == 3:
+    #     return "Goal SUCCEEDED"
+    # elif param == 2:
+    #     return "Goal PREEMPTED"
+    # elif param == 1:
+    #     return "Goal ACTIVE"
+    # elif param == 0:
+    #     return "Goal PENDING"
 
 
-def refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions):
+def refresh_dict(namespace_ros, actions_dict, topics_dict, server, idx_actions):
     topics = rospy.get_published_topics(namespace_ros)
-    tobedeleted = []
-    for actionNameOPC in actionsdict:
+    to_be_deleted = []
+    for actionNameOPC in actions_dict:
         found = False
         for topicROS, topic_type in topics:
             ros_server.own_rosnode_cleanup()
             if actionNameOPC in topicROS:
                 found = True
         if not found:
-            actionsdict[actionNameOPC].recursive_delete_items(actionsdict[actionNameOPC].parent)
-            tobedeleted.append(actionNameOPC)
+            actions_dict[actionNameOPC].recursive_delete_items(actions_dict[actionNameOPC].parent)
+            to_be_deleted.append(actionNameOPC)
             rospy.logdebug("deleting action: " + actionNameOPC)
             ros_server.own_rosnode_cleanup()
-    for name in tobedeleted:
-        del actionsdict[name]
+    for name in to_be_deleted:
+        del actions_dict[name]

@@ -47,7 +47,6 @@ class ROSServer:
         self.server.set_server_name("ROS ua Server")
         self.server.start()
 
-
         uri_messages = "http://ros.org/messages"
         idx_messages = self.server.register_namespace(uri_messages)
 
