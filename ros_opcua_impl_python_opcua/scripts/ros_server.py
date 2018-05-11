@@ -138,8 +138,8 @@ class ROSServer:
 class SubHandler(object):
     """
         This Handle variable node (Topics) update/edit.
-        When a variable node (Topics) is in client edited and  in namespace edited,
-        the changed topics has to been republished
+        When a variable node (Topics) is in client edited and in namespace edited,
+        the changed topics has to be republished
     """
 
     def event_notification(self, event):

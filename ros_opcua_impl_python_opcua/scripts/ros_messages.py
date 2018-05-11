@@ -36,15 +36,15 @@ class OpcUaROSMessage:
         self._recursive_create_items(self.parent, idx, message.split('/')[0], message.split('/')[-1], self.message_instance)
 
     def _recursive_create_items(self, parent, idx, package, message_type, message):
-        # message can be  a  object  also complex datatypes or a array
-        # This here are 'complex datatypes'
-        if hasattr(message, '__slots__')  and hasattr(message, '_slot_types') :
-            # get node if it exits or  create a new node
+        # message can be an object, a complex data types or an array
+        # Here is a 'complex data type'
+        if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
+            # get node if it exists or create a new node
 
-            node_identifier =  package+'/'+message_type
-            if node_identifier in ros_global.messageNode.keys() :
+            node_identifier = package + '/' + message_type
+            if node_identifier in ros_global.messageNode.keys():
                 node = ros_global.messageNode[node_identifier]
-            else :
+            else:
                 # add new object type node
                 datatyp_node = self.BaseDataType.add_data_type(ua.NodeId(package + '/' + message_type +'DataType', parent.nodeid.NamespaceIndex, ua.NodeIdType.String) ,
                                                                ua.QualifiedName(message_type+'DataType', parent.nodeid.NamespaceIndex), description=None)
@@ -60,10 +60,10 @@ class OpcUaROSMessage:
                 for slot_name, type_name_child in zip(message.__slots__, message._slot_types):
                     base_type_str, array_size = _extract_array_info(type_name_child)
 
-                    # if the slol is a simple type  add a variable node
+                    # if the slot is a simple type, add a variable node
                     attr_node = _create_node_with_type(new_node, package, message_type+'/'+ slot_name, type_name_child, array_size)
 
-                    if  attr_node is None:  # slot is a complex type, create new messagenode (new instance of the class RosMessage(if it doesn't exit) and call the funtion recursive_create_item in constructor)
+                    if attr_node is None:  # slot is a complex type, create new messagenode (new instance of the class RosMessage(if it doesn't exit) and call the funtion recursive_create_item in constructor)
                         attr_node = _getOrAddNewNodeVariableTypeRelatedToAMessage(base_type_str, self.server, idx)
                         # initiate variable instead to add variable
                         """
@@ -74,7 +74,8 @@ class OpcUaROSMessage:
                                     dname=ua.LocalizedText(slot_name),
                                     idx=idx)[0]
                         """
-                        var_node = new_node.add_variable_with_variable_type(
+                        # var_node = new_node.add_variable_with_variable_type
+                        var_node = new_node.add_variable(
                                                          ua.NodeId(package + '/' + message_type + '/' + slot_name, idx),
                                                          ua.QualifiedName(slot_name, idx),
                                                          ua.Variant(None ,ua.VariantType.Null),
@@ -87,7 +88,6 @@ class OpcUaROSMessage:
                             var_node.set_value_rank(1)  # is a array
                             if array_size > 0:  # or zero  [] or [n]
                                 var_node.set_array_dimensions([array_size])
-
 
         else:
             # This are arrays
@@ -111,6 +111,7 @@ class OpcUaROSMessage:
 
         return
 
+
 def _extract_array_info(type_str):
     array_size = None
     if '[' in type_str and type_str[-1] == ']':
@@ -130,6 +131,9 @@ def _get_ros_msg():
     msg_list = out.split()
     # msg_list = ['geometry_msgs/Vector3', 'geometry_msgs/Twist', 'rosgraph_msgs/Log','std_msgs/String']
     return msg_list
+    # import rospkg
+    # from rosmsg import MODE_MSG, rosmsg_cmd_list
+    # return sorted([x for x in iterate_packages(rospkg.RosPack(), MODE_MSG)])
 
 
 def _create_node_with_type(parent, package, message_name, type_name, array_size, property = True):

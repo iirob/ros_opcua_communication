@@ -9,7 +9,8 @@ import time
 import genpy
 import rospy
 import rosservice
-from opcua import ua, uamethod, common
+from opcua import ua, uamethod
+from opcua.ua.uaerrors import UaError
 
 import ros_server
 import ros_messages
@@ -57,7 +58,7 @@ class OpcUaROSService:
                 rospy.logdebug("Current Response list: " + str(return_values))
             return return_values
         except (TypeError, rospy.ROSException, rospy.ROSInternalException, rospy.ROSSerializationException,
-                common.uaerrors.UaError, rosservice.ROSServiceException) as e:
+                UaError, rosservice.ROSServiceException) as e:
             rospy.logerr("Error when calling service " + self.name, e)
 
     def create_message_instance(self, inputs, sample):
@@ -66,7 +67,7 @@ class OpcUaROSService:
         if isinstance(inputs, tuple):
             arg_counter = 0
             object_counter = 0
-            while (arg_counter < len(inputs) and object_counter < len(sample.__slots__)):
+            while arg_counter < len(inputs) and object_counter < len(sample.__slots__):
                 cur_arg = inputs[arg_counter]
                 cur_slot = sample.__slots__[object_counter]
                 real_slot = getattr(sample, cur_slot)
@@ -90,7 +91,7 @@ class OpcUaROSService:
     def create_object_instance(self, already_set, object, name, counter, inputs, sample):
         rospy.loginfo("Create Object Instance Notify")
         object_counter = 0
-        while (object_counter < len(object.__slots__) and counter < len(inputs)):
+        while object_counter < len(object.__slots__) and counter < len(inputs):
             cur_arg = inputs[counter]
             cur_slot = object.__slots__[object_counter]
             real_slot = getattr(object, cur_slot)
@@ -140,7 +141,7 @@ class OpcUaROSService:
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
                                                              newparent)
-                except IndexError, common.uaerrors.UaError:
+                except IndexError, ua.UaError:
                     newparent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),

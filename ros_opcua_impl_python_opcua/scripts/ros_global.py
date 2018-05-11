@@ -1,25 +1,20 @@
-# GLOBAL STATIC  VARIABLES
+# GLOBAL STATIC VARIABLES
 
-#packages or folders
+# packages or folders
 package_node_created = {}
 packages = []
 
-#ros messages  'message' --> nodevariableType
+# ros messages  'message' --> nodevariableType
 messageNode ={}
 
-#ros_messages 'message' --> nodeDataType
+# ros_messages 'message' --> nodeDataType
 dataTypeNode = {}
 
-
-#ros Topics  'topic_name' --> 'topic_node'
+# ros Topics  'topic_name' --> 'topic_node'
 topicNode = {}
 messageExportPath = "message.xml"
 
+# BaseDataType
+# BaseDataVariableType
 
-
-
-
-#BaseDataType
-#BaseDataVariableType
-
-#baseDataVariableType_node = ;
+# baseDataVariableType_node = ;

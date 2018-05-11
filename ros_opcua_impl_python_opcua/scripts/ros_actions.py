@@ -9,7 +9,7 @@ from pydoc import locate
 import actionlib
 import roslib
 import rospy
-from opcua import ua, common
+from opcua import ua
 from opcua import uamethod
 from opcua.ua.uaerrors import UaError
 from roslib import message

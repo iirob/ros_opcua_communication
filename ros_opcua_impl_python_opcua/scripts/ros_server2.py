@@ -11,15 +11,16 @@ import ros_services
 import ros_topics
 import ros_messages
 
+rosserver = 10
 
-rosserver =  10
-# Returns the hierachy as one string from the first remaining part on.
-def nextname(hierachy, index_of_last_processed):
+
+# Returns the hierarchy as one string from the first remaining part on.
+def nextname(hierarchy, index_of_last_processed):
     try:
         output = ""
         counter = index_of_last_processed + 1
-        while counter < len(hierachy):
-            output += hierachy[counter]
+        while counter < len(hierarchy):
+            output += hierarchy[counter]
             counter += 1
         return output
     except Exception as e:
@@ -69,7 +70,7 @@ class ROSServer:
         self.server.delete_nodes()
         for message in ros_messages._get_ros_msg():
             opcua_ros_message = ros_messages.OpcUaROSMessage(self, message_object_type, idx_messages, message.split()[0], message.split()[1])
-            opcua_ros_message.recursive_create_items(opcua_ros_message.parent, opcua_ros_message.idx, opcua_ros_message.message)
+            opcua_ros_message._recursive_create_items(opcua_ros_message.parent, opcua_ros_message.idx, opcua_ros_message.message)
 
         while not rospy.is_shutdown():
             # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.

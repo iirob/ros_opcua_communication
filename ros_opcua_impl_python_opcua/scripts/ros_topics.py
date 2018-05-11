@@ -9,6 +9,7 @@ import roslib
 import roslib.message
 import rospy
 from opcua import ua, uamethod
+from opcua.ua.uaerrors import UaError
 
 import ros_actions
 import ros_server
@@ -62,7 +63,7 @@ class OpcUaROSTopic:
         # self._nodes[topic_name].set_writable(True)
 
         # add method to update
-        parent.add_method(idx,  "update", self.opcua_update_callback)
+        parent.add_method(idx, "update", self.opcua_update_callback)
 
         # subscribe for editing
         """
@@ -87,7 +88,7 @@ class OpcUaROSTopic:
             node = ros_global.topicNode[self.name]  # self._nodes.values()[0]
             message = ros_messages.update_message_instance_with_node(self.message_instance, node)
             self.message_instance = message
-            """"
+            """
             for nodeName in self._nodes:
                 child = self._nodes[nodeName]
                 name = child.get_display_name().Text
@@ -159,7 +160,7 @@ class OpcUaROSTopic:
                         return self.recursive_create_objects(ros_server.nextname(hierarchy, hierarchy.index(name)),
                                                              idx, new_parent)
                 # thrown when node with parent name is not existent in server
-                except IndexError, common.UaError:
+                except (IndexError, UaError):
                     new_parent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),

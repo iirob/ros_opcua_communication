@@ -14,13 +14,13 @@ import ros_global
 from opcua.common.ua_utils import get_nodes_of_namespace
 
 
-# Returns the hierachy as one string from the first remaining part on.
-def nextname(hierachy, index_of_last_processed):
+# Returns the hierarchy as one string from the first remaining part on.
+def nextname(hierarchy, index_of_last_processed):
     try:
         output = ""
         counter = index_of_last_processed + 1
-        while counter < len(hierachy):
-            output += hierachy[counter]
+        while counter < len(hierarchy):
+            output += hierarchy[counter]
             counter += 1
         return output
     except Exception as e:
@@ -84,6 +84,7 @@ class ROSServer:
             time.sleep(60)
         self.server.stop()
         quit()
+
 
 def main(args):
     global rosserver
