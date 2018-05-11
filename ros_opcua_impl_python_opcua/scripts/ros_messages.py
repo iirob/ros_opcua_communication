@@ -48,7 +48,7 @@ class OpcUaROSMessage:
                 # add new object type node
                 datatyp_node = self.BaseDataType.add_data_type(ua.NodeId(package + '/' + message_type +'DataType', parent.nodeid.NamespaceIndex, ua.NodeIdType.String) ,
                                                                ua.QualifiedName(message_type+'DataType', parent.nodeid.NamespaceIndex), description=None)
-                new_node = parent.add_variable_type(ua.NodeId(package + '/' + message_type +'Type', parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                new_node = parent.add_variable(ua.NodeId(package + '/' + message_type +'Type', parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                                         ua.QualifiedName(message_type+'Type',
                                                         parent.nodeid.NamespaceIndex),
                                                         datatyp_node.nodeid)
