@@ -125,7 +125,7 @@ def _extract_array_info(type_str):
     return type_str, array_size
 
 
-def _get_ros_msg():
+def get_ros_msg():
     p = Popen(['rosmsg', 'list'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
     out, err = p.communicate()
     msg_list = out.split()
@@ -251,9 +251,9 @@ def update_node_with_message(node, message, idx):
                 update_node_with_message(child,  getattr(value, child.get_browse_name().Name), idx)
 
 
-def instantiate_custumizate(parent, node_type, node_id=None, bname=None, dname=None, idx=0):
+def instantiate_customized(parent, node_type, node_id=None, bname=None, idx=0):
     # type: (object, object, object, object, object, object) -> object
-    nodes = instantiate(parent, node_type, nodeid=node_id, bname=bname, dname=dname, idx=idx)
+    nodes = instantiate(parent, node_type, nodeid=node_id, bname=bname, idx=idx)
     new_node = nodes[0]
     init_recursiv_node(new_node, idx)
     return new_node
@@ -265,23 +265,22 @@ def init_recursiv_node(node, idx) :
     if len(children) > 0:
         for child in children:
             if child.get_node_class() == ua.NodeClass.Variable :
-                if  child.get_type_definition().NodeIdType == ua.NodeIdType.String : # complex type orcustomazed type
+                if child.get_type_definition().NodeIdType == ua.NodeIdType.String : # complex type orcustomazed type
                     variable_type_name = child.get_type_definition ().Identifier.replace('Type', '')
                     if variable_type_name in ros_global.messageNode.keys() :
                         variable_type = ros_global.messageNode[variable_type_name]
                         created_node = instantiate(node,
                                                    variable_type,
                                                    bname=child.get_browse_name(),
-                                                   dname = child.get_display_name(),
                                                    idx=idx)[0]
                         init_recursiv_node(created_node, idx)
                         child.delete()
 
 
 def update_message_instance_with_node(message, node):
-    """ the function try to update all message attribute with the help of node infos. 
-    NB: alls  node variable browsename  most be the same name als the the message attribute """
-    variables = node.get_children( nodeclassmask=ua.NodeClass.Variable)
+    """ the function try to update all message attribute with the help of node info.
+    NB: all node variable browse name  most be the same name als the the message attribute """
+    variables = node.get_children(nodeclassmask=ua.NodeClass.Variable)
 
     if len(variables) > 0:
         for var in variables:

@@ -13,8 +13,6 @@ from opcua import ua, uamethod
 from opcua.ua.uaerrors import UaError
 
 import ros_server
-import ros_messages
-import ros_global
 
 
 class OpcUaROSService:
@@ -88,13 +86,13 @@ class OpcUaROSService:
 
         return sample
 
-    def create_object_instance(self, already_set, object, name, counter, inputs, sample):
+    def create_object_instance(self, already_set, obj, name, counter, inputs, sample):
         rospy.loginfo("Create Object Instance Notify")
         object_counter = 0
-        while object_counter < len(object.__slots__) and counter < len(inputs):
+        while object_counter < len(obj.__slots__) and counter < len(inputs):
             cur_arg = inputs[counter]
-            cur_slot = object.__slots__[object_counter]
-            real_slot = getattr(object, cur_slot)
+            cur_slot = obj.__slots__[object_counter]
+            real_slot = getattr(obj, cur_slot)
             rospy.loginfo(
                 "cur_arg: " + str(cur_arg) + " cur_slot_name: " + str(cur_slot) + " real slot content: " + str(
                     real_slot))
@@ -105,11 +103,11 @@ class OpcUaROSService:
                 object_counter += 1
             else:
                 already_set.append(cur_slot)
-                setattr(object, cur_slot, cur_arg)
+                setattr(obj, cur_slot, cur_arg)
                 object_counter += 1
                 counter += 1
                 # sets the object as an attribute in the request were trying to build
-        setattr(sample, name, object)
+        setattr(sample, name, obj)
         return already_set, counter
 
     def recursive_delete_items(self, item):
@@ -129,25 +127,25 @@ class OpcUaROSService:
         for name in hierachy:
             if name != '':
                 try:
-                    nodewithsamename = self.server.find_service_node_with_same_name(name, idx)
-                    rospy.logdebug("nodewithsamename for name: " + str(name) + " is : " + str(nodewithsamename))
-                    if nodewithsamename is not None:
+                    node_with_same_name = self.server.find_service_node_with_same_name(name, idx)
+                    rospy.logdebug("node_with_same_name for name: " + str(name) + " is : " + str(node_with_same_name))
+                    if node_with_same_name is not None:
                         rospy.logdebug("recursive call for same name for: " + name)
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
-                                                             nodewithsamename)
+                                                             node_with_same_name)
                     else:
-                        newparent = parent.add_object(
+                        new_parent = parent.add_object(
                             ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
-                                                             newparent)
+                                                             new_parent)
                 except IndexError, ua.UaError:
-                    newparent = parent.add_object(
+                    new_parent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                     return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
-                                                         newparent)
+                                                         new_parent)
         return parent
 
 
@@ -155,7 +153,7 @@ def getargarray(sample_req):
     array = []
     for slot_name, type_name_child in zip(sample_req.__slots__, sample_req._slot_types):
         slot = getattr(sample_req, slot_name)
-        if hasattr(slot, '_type'): # clearly not needed
+        if hasattr(slot, '_type'):  # clearly not needed
             array_to_merge = getargarray(slot)
             array.extend(array_to_merge)
         else:
@@ -178,36 +176,36 @@ def getargarray(sample_req):
     return array
 
 
-def refresh_services(namespace_ros, server, servicesdict, idx, services_object_opc):
-    rosservices = rosservice.get_service_list(namespace=namespace_ros)
+def refresh_services(namespace_ros, server, service_dict, idx, services_object_opc):
+    ros_services = rosservice.get_service_list(namespace=namespace_ros)
 
-    for service_name_ros in rosservices:
+    for service_name_ros in ros_services:
         try:
-            if service_name_ros not in servicesdict or servicesdict[service_name_ros] is None:
+            if service_name_ros not in service_dict or service_dict[service_name_ros] is None:
                 service = OpcUaROSService(server, services_object_opc, idx, service_name_ros,
                                           rosservice.get_service_class_by_name(service_name_ros))
-                servicesdict[service_name_ros] = service
+                service_dict[service_name_ros] = service
         except (rosservice.ROSServiceException, rosservice.ROSServiceIOException) as e:
             try:
                 rospy.logerr("Error when trying to refresh services", e)
             except TypeError as e2:
-                rospy.logerr("Error when logging an Exception, can't convert everything to string")
+                rospy.logerr("Error when logging an Exception, can't convert everything to string", e2)
     # use extra iteration as to not get "dict changed during iteration" errors
-    tobedeleted = []
-    rosservices = rosservice.get_service_list()
-    for service_nameOPC in servicesdict:
+    to_be_deleted = []
+    ros_services = rosservice.get_service_list()
+    for service_nameOPC in service_dict:
         found = False
-        for rosservice_name in rosservices:
-            if service_nameOPC == rosservice_name:
+        for ros_service in ros_services:
+            if service_nameOPC == ros_service:
                 found = True
-        if not found and servicesdict[service_nameOPC] is not None:
-            servicesdict[service_nameOPC].recursive_delete_items(
+        if not found and service_dict[service_nameOPC] is not None:
+            service_dict[service_nameOPC].recursive_delete_items(
                 server.server.get_node(ua.NodeId(service_nameOPC, idx)))
-            tobedeleted.append(service_nameOPC)
-        if len(servicesdict[service_nameOPC].parent.get_children()) == 0:
-            server.server.delete_nodes([servicesdict[service_nameOPC].parent])
-    for name in tobedeleted:
-        del servicesdict[name]
+            to_be_deleted.append(service_nameOPC)
+        if len(service_dict[service_nameOPC].parent.get_children()) == 0:
+            server.server.delete_nodes([service_dict[service_nameOPC].parent])
+    for name in to_be_deleted:
+        del service_dict[name]
 
 
 def getobjectidfromtype(type_name):
@@ -223,7 +221,7 @@ def getobjectidfromtype(type_name):
         dv = ua.ObjectIds.Byte
     elif type_name == 'int16':
         dv = ua.ObjectIds.Int16
-        rospy.roswarn("Int16??")
+        rospy.logwarn("Int16??")
     elif type_name == 'uint16':
         dv = ua.ObjectIds.UInt16
     elif type_name == 'int32':

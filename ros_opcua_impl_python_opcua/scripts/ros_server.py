@@ -9,7 +9,6 @@ from opcua import Server, ua
 
 import ros_services
 import ros_topics
-import ros_messages
 import ros_global
 from opcua.common.ua_utils import get_nodes_of_namespace
 from opcua.common.instantiate import instantiate
@@ -65,27 +64,25 @@ class ROSServer:
         # get Objects node, this is where we should put our custom stuff
         objects = self.server.get_objects_node()
         # one object per type we are watching
-        topics_object   = objects.add_object(idx_topics  , "ROS-Topics")
+        topics_object = objects.add_object(idx_topics, "ROS-Topics")
         services_object = objects.add_object(idx_services, "ROS-Services")
-        actions_object  = objects.add_object(idx_actions , "ROS_Actions")
-        messages_object = objects.add_object(idx_actions , "ROS_Messages")
+        actions_object = objects.add_object(idx_actions, "ROS_Actions")
+        messages_object = objects.add_object(idx_actions, "ROS_Messages")
 
         # import message in message space
         print "---- message import started ----"
         self.server.import_xml(ros_global.messageExportPath)
-        print "---- message  imported ----"
+        print "---- message imported ----"
 
-        imported_node = []
         idx_messages = self.server.get_namespace_index(uri_messages)
         imported_node = get_nodes_of_namespace(self.server, [idx_messages])
 
         for node in imported_node:
-            identifier  = str(node.nodeid.Identifier)
+            identifier = str(node.nodeid.Identifier)
             # only for VariableType, check if the identifier ends with 'Type' (not 'DataType' ->  DataType )
-            if node.get_node_class() == ua.NodeClass.VariableType:
+            if node.get_node_class() == ua.NodeClass.Variable:
                 instantiate(messages_object,
                             node,
-                            dname = ua.LocalizedText(identifier.replace('Type','')),
                             idx=idx_messages)
                 # save node in a List/Array
                 message_typ = identifier.replace('Type', '')

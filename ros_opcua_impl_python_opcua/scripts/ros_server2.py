@@ -68,7 +68,7 @@ class ROSServer:
         actions_object = objects.add_object(idx_actions, "ROS_Actions")
 
         self.server.delete_nodes()
-        for message in ros_messages._get_ros_msg():
+        for message in ros_messages.get_ros_msg():
             opcua_ros_message = ros_messages.OpcUaROSMessage(self, message_object_type, idx_messages, message.split()[0], message.split()[1])
             opcua_ros_message._recursive_create_items(opcua_ros_message.parent, opcua_ros_message.idx, opcua_ros_message.message)
 

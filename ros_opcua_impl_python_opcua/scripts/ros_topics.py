@@ -53,11 +53,10 @@ class OpcUaROSTopic:
         variable_typ_node = ros_global.messageNode[type_name]
 
         # create a new instance of variable type and  add to name space or topics node in namespace
-        new_variable_node = ros_messages.instantiate_custumizate(parent,
-                                                                 variable_typ_node,
-                                                                 dname=ua.LocalizedText(topic_name),
-                                                                 idx=self.idx)
-        # save the new instance in  topic array
+        new_variable_node = ros_messages.instantiate_customized(parent,
+                                                                variable_typ_node,
+                                                                idx=self.idx)
+        # save the new instance in topic array
         ros_global.topicNode[topic_name] = new_variable_node
         self._nodes[topic_name] = new_variable_node
         # self._nodes[topic_name].set_writable(True)

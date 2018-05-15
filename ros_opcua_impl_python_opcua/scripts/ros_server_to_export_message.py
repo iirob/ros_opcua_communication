@@ -1,17 +1,15 @@
 #!/usr/bin/python
-import sys
 import time
 
 import rosgraph
 import rosnode
 import rospy
-from opcua import Server, ua
 
-import ros_services
-import ros_topics
+from opcua import Server
+from opcua.common.ua_utils import get_nodes_of_namespace
+
 import ros_messages
 import ros_global
-from opcua.common.ua_utils import get_nodes_of_namespace
 
 
 # Returns the hierarchy as one string from the first remaining part on.
@@ -51,13 +49,14 @@ class ROSServer:
         idx_messages = self.server.register_namespace(uri_messages)
 
         # get variableType node, this is where we should put our custom stuff
-        objects = self.server.get_objects_node()
-        baseDataVariableType_node = self.server.get_root_node().get_child(["0:Types", "0:VariableTypes", "0:BaseVariableType", "0:BaseDataVariableType"])
-        message_variable_type = baseDataVariableType_node.add_data_type(idx_messages, "ROSMessageVariableTypes")
+        # objects = self.server.get_objects_node()
+        variable_type = ["0:Types", "0:VariableTypes", "0:BaseVariableType", "0:BaseDataVariableType"]
+        base_data_variable_type_node = self.server.get_root_node().get_child(variable_type)
+        message_variable_type = base_data_variable_type_node.add_data_type(idx_messages, "ROSMessageVariableTypes")
 
         # parse every ros messages
         print " ----- start parsing  messages ------ "
-        for message in ros_messages._get_ros_msg():
+        for message in ros_messages.get_ros_msg():
             package = message.split('/')[0]
             if package not in ros_global.packages:
                 package_node = message_variable_type.add_folder(idx_messages, package)
@@ -71,14 +70,13 @@ class ROSServer:
 
         # export to xml
         print " ----- start exporting node message to xml ------ "
-        node_to_export = []
         node_to_export = get_nodes_of_namespace(self.server, [idx_messages])
         self.server.export_xml(node_to_export, ros_global.messageExportPath)
         print " ----- End exporting node message to xml ------ "
         while not rospy.is_shutdown():
             # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
-            #ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, idx_services, services_object)
-            #ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict,
+            # ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, idx_services, services_object)
+            # ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict,
             #                                      idx_topics, idx_actions, topics_object, actions_object)
             # Don't clog cpu
             time.sleep(60)
@@ -86,10 +84,9 @@ class ROSServer:
         quit()
 
 
-def main(args):
-    global rosserver
-    rosserver = ROSServer()
+def main():
+    ROSServer()
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()
