@@ -12,8 +12,13 @@ import ros_messages
 import ros_global
 
 
-# Returns the hierarchy as one string from the first remaining part on.
-def nextname(hierarchy, index_of_last_processed):
+def next_name(hierarchy, index_of_last_processed):
+    """
+    Returns the hierarchy as one string from the first remaining part on.
+    :param hierarchy: 
+    :param index_of_last_processed: 
+    :return: 
+    """
     try:
         output = ""
         counter = index_of_last_processed + 1
@@ -74,19 +79,11 @@ class ROSServer:
         self.server.export_xml(node_to_export, ros_global.messageExportPath)
         print " ----- End exporting node message to xml ------ "
         while not rospy.is_shutdown():
-            # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
-            # ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, idx_services, services_object)
-            # ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict,
-            #                                      idx_topics, idx_actions, topics_object, actions_object)
-            # Don't clog cpu
+            # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit. Don't clog cpu
             time.sleep(60)
         self.server.stop()
         quit()
 
 
-def main():
-    ROSServer()
-
-
 if __name__ == "__main__":
-    main()
+    ROSServer()
