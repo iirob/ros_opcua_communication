@@ -15,7 +15,7 @@ from opcua.common.instantiate import instantiate
 
 
 # Returns the hierarchy as one string from the first remaining part on.
-def nextname(hierarchy, index_of_last_processed):
+def next_name(hierarchy, index_of_last_processed):
     try:
         output = ""
         counter = index_of_last_processed + 1
@@ -81,9 +81,7 @@ class ROSServer:
             identifier = str(node.nodeid.Identifier)
             # only for VariableType, check if the identifier ends with 'Type' (not 'DataType' ->  DataType )
             if node.get_node_class() == ua.NodeClass.Variable:
-                instantiate(messages_object,
-                            node,
-                            idx=idx_messages)
+                instantiate(messages_object, node, idx=idx_messages)
                 # save node in a List/Array
                 message_typ = identifier.replace('Type', '')
                 ros_global.messageNode[message_typ] = node
@@ -145,10 +143,5 @@ class SubHandler(object):
         # here most a topic published
 
 
-def main(args):
-    global rosserver
-    rosserver = ROSServer()
-
-
 if __name__ == "__main__":
-    main(sys.argv)
+    ROSServer()

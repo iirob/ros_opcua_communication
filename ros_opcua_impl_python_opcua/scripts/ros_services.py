@@ -131,20 +131,20 @@ class OpcUaROSService:
                     rospy.logdebug("node_with_same_name for name: " + str(name) + " is : " + str(node_with_same_name))
                     if node_with_same_name is not None:
                         rospy.logdebug("recursive call for same name for: " + name)
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                        return self.recursive_create_objects(ros_server.next_name(hierachy, hierachy.index(name)), idx,
                                                              node_with_same_name)
                     else:
                         new_parent = parent.add_object(
                             ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                        return self.recursive_create_objects(ros_server.next_name(hierachy, hierachy.index(name)), idx,
                                                              new_parent)
                 except IndexError, ua.UaError:
                     new_parent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                    return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                    return self.recursive_create_objects(ros_server.next_name(hierachy, hierachy.index(name)), idx,
                                                          new_parent)
         return parent
 

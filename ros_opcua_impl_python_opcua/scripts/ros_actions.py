@@ -17,6 +17,7 @@ from roslib import message
 import ros_server
 import ros_services
 import ros_topics
+import ros_global
 
 
 class OpcUaROSAction:
@@ -78,7 +79,7 @@ class OpcUaROSAction:
             ua.NodeId(self.name + "_goal", self.main_node.nodeid.NamespaceIndex, ua.NodeIdType.String),
             ua.QualifiedName("goal", parent.nodeid.NamespaceIndex))
         self.goal_node = self.goal.add_method(idx, self.name + "_send_goal", self.send_goal,
-                                              getargarray(self.goal_instance), [])
+                                              _get_arg_array(self.goal_instance), [])
 
         self.goal_cancel = self.goal.add_method(idx, self.name + "_cancel_goal", self.cancel_goal, [], [])
 
@@ -97,7 +98,7 @@ class OpcUaROSAction:
 
             except rospy.ROSException:
                 self.message_class = None
-                rospy.logerror("Didn't find feedback message class for type " + self.feedback_type)
+                rospy.logerr("Didn't find feedback message class for type " + self.feedback_type)
 
             self._recursive_create_feedback_items(self.feedback, self.name + "/feedback", self.feedback_type,
                                                   getattr(self.feedback_message_instance, "feedback"))
@@ -111,17 +112,17 @@ class OpcUaROSAction:
         self.status_node.set_value("No goal sent yet")
         rospy.loginfo("Created ROS Action with name: %s", self.name)
 
-    def message_callback(self, message):
-        self.update_value(self.name + "/feedback", message)
+    def message_callback(self, msg):
+        self.update_value(self.name + "/feedback", msg)
 
-    def update_value(self, topic_name, message):
-        if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
-            for slot_name in message.__slots__:
-                self.update_value(topic_name + '/' + slot_name, getattr(message, slot_name))
+    def update_value(self, topic_name, msg):
+        if hasattr(msg, '__slots__') and hasattr(msg, '_slot_types'):
+            for slot_name in msg.__slots__:
+                self.update_value(topic_name + '/' + slot_name, getattr(msg, slot_name))
 
-        elif type(message) in (list, tuple):
-            if (len(message) > 0) and hasattr(message[0], '__slots__'):
-                for index, slot in enumerate(message):
+        elif type(msg) in (list, tuple):
+            if (len(msg) > 0) and hasattr(msg[0], '__slots__'):
+                for index, slot in enumerate(msg):
                     if topic_name + '[%d]' % index in self._feedback_nodes:
                         self.update_value(topic_name + '[%d]' % index, slot)
                     else:
@@ -129,18 +130,17 @@ class OpcUaROSAction:
                             base_type_str, _ = ros_topics._extract_array_info(
                                 self._feedback_nodes[topic_name].text(self.feedback_type))
                             self._recursive_create_items(self._feedback_nodes[topic_name], topic_name + '[%d]' % index,
-                                                         base_type_str,
-                                                         slot, None)
+                                                         base_type_str, slot, None)
             # remove obsolete children
             if topic_name in self._feedback_nodes:
-                if len(message) < len(self._feedback_nodes[topic_name].get_children()):
-                    for i in range(len(message), self._feedback_nodes[topic_name].childCount()):
+                if len(msg) < len(self._feedback_nodes[topic_name].get_children()):
+                    for i in range(len(msg), self._feedback_nodes[topic_name].childCount()):
                         item_topic_name = topic_name + '[%d]' % i
                         self.recursive_delete_items(self._feedback_nodes[item_topic_name])
                         del self._feedback_nodes[item_topic_name]
         else:
             if topic_name in self._feedback_nodes and self._feedback_nodes[topic_name] is not None:
-                self._feedback_nodes[topic_name].set_value(repr(message))
+                self._feedback_nodes[topic_name].set_value(repr(msg))
 
     @uamethod
     def cancel_goal(self, parent, *inputs):
@@ -153,35 +153,36 @@ class OpcUaROSAction:
 
     def recursive_create_objects(self, topic_name, idx, parent):
         rospy.logdebug("reached parent object creation! current parent: " + str(parent))
-        hierachy = topic_name.split('/')
-        rospy.logdebug("Current hierachy: " + str(hierachy))
-        if len(hierachy) == 0 or len(hierachy) == 1:
+        hierarchy = topic_name.split('/')
+        rospy.logdebug("Current hierarchy: " + str(hierarchy))
+        if len(hierarchy) == 0 or len(hierarchy) == 1:
             return parent
-        for name in hierachy:
+        for name in hierarchy:
             rospy.logdebug("current name: " + str(name))
             if name != '':
                 try:
-                    nodewithsamename = self.server.find_action_node_with_same_name(name, idx)
-                    if nodewithsamename is not None:
+                    node_with_same_name = self.server.find_action_node_with_same_name(name, idx)
+                    if node_with_same_name is not None:
                         rospy.logdebug("Found node with same name, is now new parent")
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
-                                                             nodewithsamename)
+                        return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)), idx,
+                                                             node_with_same_name)
                     else:
-                        # if for some reason 2 services with exactly same name are created use hack>: add random int, prob to hit two
+                        # if for some reason 2 services with exactly same name are created use hack>: add random int,
+                        #  prob to hit two
                         # same ints 1/10000, should be sufficient
-                        newparent = parent.add_object(
+                        new_parent = parent.add_object(
                             ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
-                                                             newparent)
+                        return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)), idx,
+                                                             new_parent)
                 # thrown when node with parent name is not existent in server
-                except IndexError, UaError:
-                    newparent = parent.add_object(
+                except (IndexError, UaError):
+                    new_parent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                    return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
-                                                         newparent)
+                    return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)), idx,
+                                                         new_parent)
 
         return parent
 
@@ -251,7 +252,7 @@ class OpcUaROSAction:
                                   active_cb=self.update_state)
             return
         except Exception as e:
-            rospy.logerr("Error occured during goal sending for Action " + str(self.name))
+            rospy.logerr("Error occurred during goal sending for Action " + str(self.name))
             print(e)
 
     def create_message_instance(self, inputs, sample):
@@ -270,7 +271,7 @@ class OpcUaROSAction:
                     if object_counter < len(sample.__slots__):
                         cur_slot = sample.__slots__[object_counter]
                 real_slot = getattr(sample, cur_slot)
-                rospy.lodebug(
+                rospy.logdebug(
                     "cur_arg: " + str(cur_arg) + " cur_slot_name: " + str(cur_slot) + " real slot content: " + str(
                         real_slot))
                 if hasattr(real_slot, '_type'):
@@ -291,36 +292,36 @@ class OpcUaROSAction:
 
         return sample
 
-    def create_object_instance(self, already_set, object, name, counter, inputs, parent):
+    def create_object_instance(self, already_set, obj, name, counter, inputs, parent):
         rospy.logdebug("Create Object Instance Notify")
         object_counter = 0
-        while object_counter < len(object.__slots__) and counter < len(inputs):
+        while object_counter < len(obj.__slots__) and counter < len(inputs):
             cur_arg = inputs[counter]
-            cur_slot = object.__slots__[object_counter]
+            cur_slot = obj.__slots__[object_counter]
             # ignore header for malformed move_base_goal, as header shouldnt be in sent message
             while cur_slot == 'header':
                 rospy.logdebug("ignoring header")
                 object_counter += 1
-                if object_counter < len(object.__slots__):
-                    cur_slot = object.__slots__[object_counter]
+                if object_counter < len(obj.__slots__):
+                    cur_slot = obj.__slots__[object_counter]
                 else:
                     return already_set, counter
-            real_slot = getattr(object, cur_slot)
+            real_slot = getattr(obj, cur_slot)
             rospy.logdebug(
                 "cur_arg: " + str(cur_arg) + " cur_slot_name: " + str(cur_slot) + " real slot content: " + str(
                     real_slot))
             if hasattr(real_slot, '_type'):
                 rospy.logdebug("Recursive Object found in request/response of service call")
                 already_set, counter = self.create_object_instance(already_set, real_slot, cur_slot, counter, inputs,
-                                                                   object)
+                                                                   obj)
                 object_counter += 1
             else:
                 already_set.append(cur_slot)
-                setattr(object, cur_slot, cur_arg)
+                setattr(obj, cur_slot, cur_arg)
                 object_counter += 1
                 counter += 1
                 # sets the object as an attribute in the request were trying to build
-        setattr(parent, name, object)
+        setattr(parent, name, obj)
         return already_set, counter
 
     def recursive_delete_items(self, item):
@@ -333,7 +334,7 @@ class OpcUaROSAction:
 
     def update_result(self, state, result):
         rospy.logdebug("updated result cb reached")
-        self.status_node.set_value(map_status_to_string(state))
+        self.status_node.set_value(_map_status_to_string(state))
         self.result_node.set_value(repr(result))
 
     def update_state(self):
@@ -363,13 +364,13 @@ def get_correct_name(topic_name):
         counter += 1
 
 
-def getargarray(goal_class):
+def _get_arg_array(goal_class):
     array = []
     for slot_name in goal_class.__slots__:
         if slot_name != 'header':
             slot = getattr(goal_class, slot_name)
             if hasattr(slot, '_type'):
-                array_to_merge = getargarray(slot)
+                array_to_merge = _get_arg_array(slot)
                 array.extend(array_to_merge)
             else:
                 if isinstance(slot, list):
@@ -395,39 +396,8 @@ def getargarray(goal_class):
     return array
 
 
-def map_status_to_string(param):
-    status_string = {9: "Goal LOST",
-                     8: "Goal RECALLED",
-                     7: "Goal RECALLING",
-                     6: "Goal PREEMPTING",
-                     5: "Goal REJECTED",
-                     4: "Goal ABORTED",
-                     3: "Goal SUCCEEDED",
-                     2: "Goal PREEMPTED",
-                     1: "Goal ACTIVE",
-                     0: "Goal PENDING"}
-    return status_string[param]
-
-    # if param == 9:
-    #     return "Goal LOST"
-    # elif param == 8:
-    #     return "Goal RECALLED"
-    # elif param == 7:
-    #     return "Goal RECALLING"
-    # elif param == 6:
-    #     return "Goal PREEMPTING"
-    # elif param == 5:
-    #     return "Goal REJECTED"
-    # elif param == 4:
-    #     return "Goal ABORTED"
-    # elif param == 3:
-    #     return "Goal SUCCEEDED"
-    # elif param == 2:
-    #     return "Goal PREEMPTED"
-    # elif param == 1:
-    #     return "Goal ACTIVE"
-    # elif param == 0:
-    #     return "Goal PENDING"
+def _map_status_to_string(param):
+    return ros_global.status_string[param]
 
 
 def refresh_dict(namespace_ros, actions_dict, topics_dict, server, idx_actions):

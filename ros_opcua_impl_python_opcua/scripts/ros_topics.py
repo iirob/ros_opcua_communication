@@ -147,7 +147,7 @@ class OpcUaROSTopic:
                 try:
                     nodewithsamename = self.server.find_topics_node_with_same_name(name, idx)
                     if nodewithsamename is not None:
-                        return self.recursive_create_objects(ros_server.nextname(hierarchy, hierarchy.index(name)), idx,
+                        return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)), idx,
                                                              nodewithsamename)
                     else:
                         # if for some reason 2 services with exactly same name are created use hack>: add random int,
@@ -156,7 +156,7 @@ class OpcUaROSTopic:
                             ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
 
-                        return self.recursive_create_objects(ros_server.nextname(hierarchy, hierarchy.index(name)),
+                        return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)),
                                                              idx, new_parent)
                 # thrown when node with parent name is not existent in server
                 except (IndexError, UaError):
@@ -164,7 +164,7 @@ class OpcUaROSTopic:
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                    return self.recursive_create_objects(ros_server.nextname(hierarchy, hierarchy.index(name)), idx,
+                    return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)), idx,
                                                          new_parent)
         return parent
 
