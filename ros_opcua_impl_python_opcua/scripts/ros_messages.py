@@ -143,6 +143,16 @@ def get_ros_msg():
 
 
 def _create_node_with_type(parent, package, message_name, type_name, array_size, prop=True):
+    """
+
+    :param parent:
+    :param package:
+    :param message_name:
+    :param type_name:
+    :param array_size:
+    :param prop: Property
+    :return:
+    """
     if '[' in type_name:
         type_name = type_name[:type_name.index('[')]
 
@@ -277,14 +287,14 @@ def instantiate_customized(parent, node_type, node_id=None, bname=None, idx=0):
 
     nodes = instantiate(parent, node_type, nodeid=node_id, bname=bname, idx=idx)
     new_node = nodes[0]
-    _init_recursive_node(new_node, idx)
+    _init_node_recursively(new_node, idx)
     return new_node
 
 
-def _init_recursive_node(node, idx):
+def _init_node_recursively(node, idx):
     """ 
     This function initiate all the sub variable with complex type of customized type of the node
-    :param node:
+    :param node: opc ua node
     :param idx:
     """
 
@@ -297,7 +307,7 @@ def _init_recursive_node(node, idx):
             if variable_type_name in ros_global.messageNode.keys():
                 variable_type = ros_global.messageNode[variable_type_name]
                 created_node = instantiate(node, variable_type, bname=child.get_browse_name(), idx=idx)[0]
-                _init_recursive_node(created_node, idx)
+                _init_node_recursively(created_node, idx)
                 child.delete()
 
 
