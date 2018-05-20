@@ -5,7 +5,7 @@ package_node_created = {}
 packages = []
 
 # ros messages  'message' --> nodevariableType
-messageNode ={}
+messageNode = {}
 
 # ros_messages 'message' --> nodeDataType
 dataTypeNode = {}

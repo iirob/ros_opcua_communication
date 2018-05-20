@@ -245,7 +245,7 @@ def _process_node_variable_type(message, server, idx):
 
 def update_node_with_message(node, message, idx):
     """
-    the method update all variable of a node or copy all  value from message to node
+    the method update all variable of a node or copy all values from message to node
     IMPORT: the variable browser name of the variable node most be the same as the attribute of the message object
     """
     value = message
@@ -276,7 +276,7 @@ def update_node_with_message(node, message, idx):
 def instantiate_customized(parent, node_type, node_id=None, bname=None, idx=0):
     """
     Please take care that in the new version of python opcua, the dname, ie. the DisplayName is deleted from the
-     parameter list
+     parameter list in instantiate function
     :param parent: 
     :param node_type: 
     :param node_id: 
