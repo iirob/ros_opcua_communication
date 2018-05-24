@@ -6,9 +6,31 @@ set(BUILD_SERVER ON)
 set(BUILD_PYTHON ON)
 set(BUILD_TESTING OFF)
 
-add_subdirectory(freeopcua)
+#add_subdirectory(freeopcua)
 
-set(FreeOpcUa_LIBRARIES opcua)
+#set(FreeOpcUa_LIBRARIES opcua)
+add_compile_options(-std=c++11)
+
+find_path(MBEDTLS_INCLUDE_DIRS mbedtls/ssl.h)
+
+find_library(MBEDTLS_LIBRARY mbedtls)
+find_library(MBEDX509_LIBRARY mbedx509)
+find_library(MBEDCRYPTO_LIBRARY mbedcrypto)
+
+set(MBEDTLS_LIBRARIES "${MBEDTLS_LIBRARY}" "${MBEDX509_LIBRARY}" "${MBEDCRYPTO_LIBRARY}")
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(MBEDTLS DEFAULT_MSG MBEDTLS_INCLUDE_DIRS MBEDTLS_LIBRARY MBEDX509_LIBRARY MBEDCRYPTO_LIBRARY)
+
+mark_as_advanced(MBEDTLS_INCLUDE_DIRS MBEDTLS_LIBRARY MBEDX509_LIBRARY MBEDCRYPTO_LIBRARY)
+
+
+include(FindPkgConfig)
+
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(FreeOpcUa REQUIRED  libopcuaprotocol libopcuacore libopcuaclient  libopcuaserver   )
+
 
 find_package(catkin REQUIRED
   roscpp
@@ -19,7 +41,7 @@ find_package(catkin REQUIRED
 find_package(Boost REQUIRED COMPONENTS system thread)
 
 catkin_package(
- INCLUDE_DIRS include freeopcua/include
+ INCLUDE_DIRS include #freeopcua/include
  CATKIN_DEPENDS roscpp ros_opcua_msgs ros_opcua_srvs
 )
 
@@ -38,7 +60,8 @@ include_directories(
 
 add_executable(client_node src/opcua_client.cpp)
 add_dependencies(client_node ros_opcua_msgs_generate_messages_cpp ros_opcua_srvs_generate_messages_cpp)
-target_link_libraries(client_node ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${FreeOpcUa_LIBRARIES})
+
+target_link_libraries(client_node ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${FreeOpcUa_LIBRARIES} ${MBEDTLS_LIBRARY} ${MBEDX509_LIBRARY} ${MBEDCRYPTO_LIBRARY})
 
 #############
 ## Install ##
