@@ -1,6 +1,3 @@
-#!/usr/bin/python
-import time
-
 import rosgraph
 import rosnode
 import rospy
@@ -26,8 +23,8 @@ def next_name(hierarchy, index_of_last_processed):
             output += hierarchy[counter]
             counter += 1
         return output
-    except Exception as e:
-        rospy.logerr("Error encountered ", e)
+    except Exception as ex:
+        rospy.logerr("Error encountered ", ex)
 
 
 def own_rosnode_cleanup():
@@ -48,42 +45,51 @@ class ROSServer:
         self.server = Server()
         self.server.set_endpoint("opc.tcp://0.0.0.0:21554/")
         self.server.set_server_name("ROS ua Server")
-        self.server.start()
 
-        uri_messages = "http://ros.org/messages"
-        idx_messages = self.server.register_namespace(uri_messages)
+        self.uri_messages = "http://ros.org/messages"
+        self.idx_messages = self.server.register_namespace(self.uri_messages)
 
         # get variableType node, this is where we should put our custom stuff
-        # objects = self.server.get_objects_node()
-        variable_type = ["0:Types", "0:VariableTypes", "0:BaseVariableType", "0:BaseDataVariableType"]
-        base_data_variable_type_node = self.server.get_root_node().get_child(variable_type)
-        message_variable_type = base_data_variable_type_node.add_data_type(idx_messages, "ROSMessageVariableTypes")
+        hierarchical_path = ["0:Types", "0:VariableTypes", "0:BaseVariableType", "0:BaseDataVariableType"]
+        base_data_variable_type_node = self.server.get_root_node().get_child(hierarchical_path)
+        # As can be seen in UAExpert, in BaseDataVariableType, all nodes are VariableType, only our
+        # ROSMessageVariableTypes is a data type, maybe change to add_variable_type??? isAbstract should be set to true
+        self.message_variable_type = base_data_variable_type_node.add_data_type(self.idx_messages,
+                                                                                "ROSMessageVariableTypes")
 
+    def __enter__(self):
+        self.server.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.server.stop()
+        quit()
+
+    def export_message(self):
         # parse every ros messages
-        print " ----- start parsing  messages ------ "
+        print(" ----- start parsing messages ------ ")
         for message in ros_messages.get_ros_msg():
             package = message.split('/')[0]
             if package not in ros_global.packages:
-                package_node = message_variable_type.add_folder(idx_messages, package)
+                package_node = self.message_variable_type.add_folder(self.idx_messages, package)
                 ros_global.packages.append(package)
                 ros_global.package_node_created[package] = package_node
             else:
                 package_node = ros_global.package_node_created.get(package)
 
-            ros_messages.OpcUaROSMessage(self.server, package_node, idx_messages, message)
-        print " ----- parsing  messages end------ "
+            ros_messages.OpcUaROSMessage(self.server, package_node, self.idx_messages, message)
+        print(" ----- parsing  messages end------ ")
 
         # export to xml
-        print " ----- start exporting node message to xml ------ "
-        node_to_export = get_nodes_of_namespace(self.server, [idx_messages])
+        print(" ----- start exporting node message to xml ------ ")
+        node_to_export = get_nodes_of_namespace(self.server, [self.idx_messages])
         self.server.export_xml(node_to_export, ros_global.messageExportPath)
-        print " ----- End exporting node message to xml ------ "
-        while not rospy.is_shutdown():
-            # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit. Don't clog cpu
-            time.sleep(60)
-        self.server.stop()
-        quit()
+        print(" ----- End exporting node message to xml ------ ")
 
 
 if __name__ == "__main__":
-    ROSServer()
+    try:
+        with ROSServer() as ua_server:
+            ua_server.export_message()
+    except Exception as e:
+        print(e.message)

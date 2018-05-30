@@ -1,10 +1,11 @@
 # GLOBAL STATIC VARIABLES
 
-# packages or folders
+# created UA nodes in UA Server, only the ROS related nodes
 package_node_created = {}
+# retrieved ROS package names
 packages = []
 
-# ros messages  'message' --> nodevariableType
+# ros messages  'message' --> nodeVariableType
 messageNode = {}
 
 # ros_messages 'message' --> nodeDataType

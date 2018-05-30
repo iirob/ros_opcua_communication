@@ -19,8 +19,8 @@ class OpcUaROSMessage:
         self.message = message
         self._nodes = {}
         self.node = {}
-        var_type = ["0:Types", "0:DataTypes", "0:BaseDataType", "0:Structure"]
-        self.BaseDataType = self.server.get_root_node().get_child(var_type)
+        hierarchical_path = ["0:Types", "0:DataTypes", "0:BaseDataType", "0:Structure"]
+        self.BaseDataType = self.server.get_root_node().get_child(hierarchical_path)
 
         self.message_class = None
 
@@ -40,6 +40,7 @@ class OpcUaROSMessage:
     def _recursive_create_items(self, parent, idx, package, message_type, message):
         # message can be an object, a complex data types or an array
         # Here is a 'complex data type'
+        # TODO: For complex type, the correct hierarchy should be built up, Not always BasicVariableDataType!!!
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             # get node if it exists or create a new node
 
@@ -50,22 +51,22 @@ class OpcUaROSMessage:
                 # add new object type node
                 data_type_id = ua.NodeId(package + '/' + message_type + 'DataType',
                                          parent.nodeid.NamespaceIndex, ua.NodeIdType.String)
-                data_type_q_name = ua.QualifiedName(message_type+'DataType', parent.nodeid.NamespaceIndex)
-                data_type_node = self.BaseDataType.add_data_type(data_type_id, data_type_q_name, description=None)
-
+                data_type_b_name = ua.QualifiedName(message_type + 'DataType', parent.nodeid.NamespaceIndex)
+                data_type_node = self.BaseDataType.add_data_type(data_type_id, data_type_b_name, description=None)
+                # not add VariableType? Then why check VariableType in ros_server.py ?
                 new_node = parent.add_variable(ua.NodeId(package + '/' + message_type + 'Type',
                                                          parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                                ua.QualifiedName(message_type+'Type', parent.nodeid.NamespaceIndex),
                                                data_type_node.nodeid)
-                # opcua.common.node.Node(parent.server)
+
                 ros_global.messageNode[node_identifier] = new_node
                 ros_global.dataTypeNode[node_identifier] = data_type_node
 
                 # get over all message attribute and add a variable node to the new object type-node
-                for slot_name, type_name_child in zip(message.__slots__, message._slot_types):
+                for slot_name, type_name_child in zip(message.__slots__, message.__getattribute__('_slot_types')):
                     base_type_str, array_size = _extract_array_info(type_name_child)
 
-                    # if the slot is a simple type, add a variable node
+                    # if the slot is a simple type, add a variable node, why not directly use if????
                     attr_node = _create_node_with_type(new_node, package, message_type + '/' + slot_name,
                                                        type_name_child, array_size)
 
@@ -74,15 +75,6 @@ class OpcUaROSMessage:
                         # (new instance of the class RosMessage(if it doesn't exit)
                         # and call the function recursive_create_item in constructor)
                         attr_node = _process_node_variable_type(base_type_str, self.server, idx)
-                        # initiate variable instead to add variable
-                        """
-                        var_node =instantiate(new_node,
-                                    attr_node,
-                                    nodeid = ua.NodeId(package + '/' + message_type + '/' + slot_name, idx),
-                                    bname = ua.QualifiedName(slot_name, idx),
-                                    dname=ua.LocalizedText(slot_name),
-                                    idx=idx)[0]
-                        """
                         var_node = new_node.add_variable(ua.NodeId(package + '/' + message_type + '/' + slot_name, idx),
                                                          ua.QualifiedName(slot_name, idx),
                                                          ua.Variant(None, ua.VariantType.Null),
@@ -107,7 +99,7 @@ class OpcUaROSMessage:
 
             if array_size is not None and hasattr(base_instance, '__slots__'):  # for array of complex objects
                 for index in range(array_size):
-                    print ""
+                    print('')
             else:   # for base type and array of base types
                 new_node = _create_node_with_type(parent, package, message_type, message, array_size)
                 # if new_node is None:
@@ -119,6 +111,7 @@ class OpcUaROSMessage:
 
 
 def _extract_array_info(type_str):
+    # TODO: correct set the array_size of a scala, i.e. to -1 according to the documentation.
     array_size = None
     if '[' in type_str and type_str[-1] == ']':
         type_str, array_size_str = type_str.split('[', 1)
@@ -144,7 +137,9 @@ def get_ros_msg():
 
 def _create_node_with_type(parent, package, message_name, type_name, array_size, prop=True):
     """
-
+    This function must be refactored, since it contains two functions, one is to check if it
+    is a simple type, another is that if it is a simple type, then create a node, confusing
+    on first sight! Violated WTF.
     :param parent:
     :param package:
     :param message_name:
@@ -187,8 +182,7 @@ def _create_node_with_type(parent, package, message_name, type_name, array_size,
     elif type_name == 'time' or type_name == 'duration':
         dv = ua.Variant(datetime.utcnow(), ua.VariantType.DateTime)
     else:
-        "check if node exists, create node   and add reference to the new node"
-        # rospy.logerr("can't create node with type " + str(type_name))
+        "check if node exists, create node and add reference to the new node"
         return None
 
     # create new node
@@ -220,10 +214,9 @@ def _process_node_variable_type(message, server, idx):
     :param idx: 
     :return: 
     """
-
-    variable_type = ["0:Types", "0:VariableTypes", "0:BaseVariableType", "0:BaseDataVariableType",
-                     str(idx)+":ROSMessageVariableTypes"]
-    message_variable_type = server.get_root_node().get_child(variable_type)
+    hierarchical_path = ["0:Types", "0:VariableTypes", "0:BaseVariableType", "0:BaseDataVariableType",
+                         str(idx) + ":ROSMessageVariableTypes"]
+    message_variable_type = server.get_root_node().get_child(hierarchical_path)
 
     # if node is a complex type, check if node message node exits -> add reference to the current message node
     # if not create message node and add reference
@@ -294,6 +287,7 @@ def instantiate_customized(parent, node_type, node_id=None, bname=None, idx=0):
 def _init_node_recursively(node, idx):
     """ 
     This function initiate all the sub variable with complex type of customized type of the node
+    But it seems that the instantiate function itself is a recursive realization!!!
     :param node: opc ua node
     :param idx:
     """
