@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import rosgraph
 import rosnode
 import rospy
@@ -17,14 +18,14 @@ def next_name(hierarchy, index_of_last_processed):
     :return: 
     """
     try:
-        output = ""
+        output = ''
         counter = index_of_last_processed + 1
         while counter < len(hierarchy):
             output += hierarchy[counter]
             counter += 1
         return output
     except Exception as ex:
-        rospy.logerr("Error encountered ", ex)
+        rospy.logerr('Error encountered ', ex)
 
 
 def own_rosnode_cleanup():
@@ -37,28 +38,29 @@ def own_rosnode_cleanup():
 
 class ROSServer:
     def __init__(self):
-        self.namespace_ros = rospy.get_param("/rosopcua/namespace")
+        self.namespace_ros = rospy.get_param('/rosopcua/namespace')
         self.topicsDict = {}
         self.servicesDict = {}
         self.actionsDict = {}
-        rospy.init_node("rosopcua")
         self.server = Server()
-        self.server.set_endpoint("opc.tcp://0.0.0.0:21554/")
-        self.server.set_server_name("ROS ua Server")
 
-        self.uri_messages = "http://ros.org/messages"
-        self.idx_messages = self.server.register_namespace(self.uri_messages)
+        self.server.set_endpoint('opc.tcp://0.0.0.0:21554/')
+        self.server.set_server_name('ROS ua Server')
+
+        self.idx_messages = self.server.register_namespace('http://ros.org/messages')
 
         # get variableType node, this is where we should put our custom stuff
-        hierarchical_path = ["0:Types", "0:VariableTypes", "0:BaseVariableType", "0:BaseDataVariableType"]
+        hierarchical_path = ['0:Types', '0:VariableTypes', '0:BaseVariableType', '0:BaseDataVariableType']
         base_data_variable_type_node = self.server.get_root_node().get_child(hierarchical_path)
         # As can be seen in UAExpert, in BaseDataVariableType, all nodes are VariableType, only our
-        # ROSMessageVariableTypes is a data type, maybe change to add_variable_type??? isAbstract should be set to true
+        # TODO: ROSMessageVariableTypes is a data type, maybe change to add_variable_type???
+        # isAbstract should be set to true
         self.message_variable_type = base_data_variable_type_node.add_data_type(self.idx_messages,
-                                                                                "ROSMessageVariableTypes")
+                                                                                'ROSMessageVariableTypes')
 
     def __enter__(self):
         self.server.start()
+        rospy.init_node('rosopcua')
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -67,7 +69,7 @@ class ROSServer:
 
     def export_message(self):
         # parse every ros messages
-        print(" ----- start parsing messages ------ ")
+        print(' ----- start parsing messages ------ ')
         for message in ros_messages.get_ros_msg():
             package = message.split('/')[0]
             if package not in ros_global.packages:
@@ -78,16 +80,16 @@ class ROSServer:
                 package_node = ros_global.package_node_created.get(package)
 
             ros_messages.OpcUaROSMessage(self.server, package_node, self.idx_messages, message)
-        print(" ----- parsing  messages end------ ")
+        print(' ----- parsing  messages end------ ')
 
         # export to xml
-        print(" ----- start exporting node message to xml ------ ")
+        print(' ----- start exporting node message to xml ------ ')
         node_to_export = get_nodes_of_namespace(self.server, [self.idx_messages])
         self.server.export_xml(node_to_export, ros_global.messageExportPath)
-        print(" ----- End exporting node message to xml ------ ")
+        print(' ----- End exporting node message to xml ------ ')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     try:
         with ROSServer() as ua_server:
             ua_server.export_message()

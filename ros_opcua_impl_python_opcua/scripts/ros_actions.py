@@ -15,9 +15,19 @@ from opcua.ua.uaerrors import UaError
 from roslib import message
 
 import ros_server
-import ros_services
-import ros_topics
 import ros_global
+import ros_topics
+
+status_string = {9: 'Goal LOST',
+                 8: 'Goal RECALLED',
+                 7: 'Goal RECALLING',
+                 6: 'Goal PREEMPTING',
+                 5: 'Goal REJECTED',
+                 4: 'Goal ABORTED',
+                 3: 'Goal SUCCEEDED',
+                 2: 'Goal PREEMPTED',
+                 1: 'Goal ACTIVE',
+                 0: 'Goal PENDING'}
 
 
 class OpcUaROSAction:
@@ -161,7 +171,7 @@ class OpcUaROSAction:
             rospy.logdebug("current name: " + str(name))
             if name != '':
                 try:
-                    node_with_same_name = self.server.find_action_node_with_same_name(name, idx)
+                    node_with_same_name = self.server.find_action_node_with_same_name(name)
                     if node_with_same_name is not None:
                         rospy.logdebug("Found node with same name, is now new parent")
                         return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)), idx,
@@ -377,7 +387,7 @@ def _get_arg_array(goal_class):
                     rospy.logdebug("Found an Array Argument!")
                     arg = ua.Argument()
                     arg.Name = slot_name
-                    arg.DataType = ua.NodeId(ros_services.getobjectidfromtype("array"))
+                    arg.DataType = ua.NodeId(ros_global.get_object_ids("array"))
                     arg.ValueRank = -1
                     arg.ArrayDimensions = []
                     arg.Description = ua.LocalizedText("Array")
@@ -387,7 +397,7 @@ def _get_arg_array(goal_class):
                         arg.Name = goal_class.__name__ + slot_name
                     else:
                         arg.Name = slot_name
-                    arg.DataType = ua.NodeId(ros_services.getobjectidfromtype(type(slot).__name__))
+                    arg.DataType = ua.NodeId(ros_global.get_object_ids(type(slot).__name__))
                     arg.ValueRank = -1
                     arg.ArrayDimensions = []
                     arg.Description = ua.LocalizedText(slot_name)
@@ -397,7 +407,7 @@ def _get_arg_array(goal_class):
 
 
 def _map_status_to_string(param):
-    return ros_global.status_string[param]
+    return status_string.get(param, 'Invalid Status!')
 
 
 def refresh_dict(namespace_ros, actions_dict, topics_dict, server, idx_actions):

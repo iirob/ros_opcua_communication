@@ -19,7 +19,7 @@ class OpcUaROSMessage:
         self.message = message
         self._nodes = {}
         self.node = {}
-        hierarchical_path = ["0:Types", "0:DataTypes", "0:BaseDataType", "0:Structure"]
+        hierarchical_path = ['0:Types', '0:DataTypes', '0:BaseDataType', '0:Structure']
         self.BaseDataType = self.server.get_root_node().get_child(hierarchical_path)
 
         self.message_class = None
@@ -89,7 +89,7 @@ class OpcUaROSMessage:
                                 var_node.set_array_dimensions([array_size])
 
         else:
-            # This are arrays
+            # arrays
             base_type_str, array_size = _extract_array_info(message)
 
             try:
@@ -111,7 +111,7 @@ class OpcUaROSMessage:
 
 
 def _extract_array_info(type_str):
-    # TODO: correct set the array_size of a scala, i.e. to -1 according to the documentation.
+    # TODO: correct set the array_size of a scala, i.e. -1 according to the documentation.
     array_size = None
     if '[' in type_str and type_str[-1] == ']':
         type_str, array_size_str = type_str.split('[', 1)
@@ -125,21 +125,19 @@ def _extract_array_info(type_str):
 
 
 def get_ros_msg():
-    p = Popen(['rosmsg', 'list'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    out, err = p.communicate()
-    msg_list = out.split()
-    # msg_list = ['geometry_msgs/Vector3', 'geometry_msgs/Twist', 'rosgraph_msgs/Log','std_msgs/String']
-    return msg_list
-    # import rospkg
-    # from rosmsg import MODE_MSG, rosmsg_cmd_list
-    # return sorted([x for x in iterate_packages(rospkg.RosPack(), MODE_MSG)])
+    """
+    Same as execute 'rosmsg list' in terminal
+    :return: a list with msgs
+    """
+    out, _ = Popen(['rosmsg', 'list'], stdin=PIPE, stdout=PIPE, stderr=PIPE).communicate()
+    return out.split()
 
 
 def _create_node_with_type(parent, package, message_name, type_name, array_size, prop=True):
     """
     This function must be refactored, since it contains two functions, one is to check if it
     is a simple type, another is that if it is a simple type, then create a node, confusing
-    on first sight! Violated WTF.
+    on first sight. Violated least astonishment principle and single responsibility principle.
     :param parent:
     :param package:
     :param message_name:
@@ -182,7 +180,7 @@ def _create_node_with_type(parent, package, message_name, type_name, array_size,
     elif type_name == 'time' or type_name == 'duration':
         dv = ua.Variant(datetime.utcnow(), ua.VariantType.DateTime)
     else:
-        "check if node exists, create node and add reference to the new node"
+        # check if node exists, create node and add reference to the new node
         return None
 
     # create new node
@@ -214,8 +212,8 @@ def _process_node_variable_type(message, server, idx):
     :param idx: 
     :return: 
     """
-    hierarchical_path = ["0:Types", "0:VariableTypes", "0:BaseVariableType", "0:BaseDataVariableType",
-                         str(idx) + ":ROSMessageVariableTypes"]
+    hierarchical_path = ['0:Types', '0:VariableTypes', '0:BaseVariableType', '0:BaseDataVariableType',
+                         str(idx) + ':ROSMessageVariableTypes']
     message_variable_type = server.get_root_node().get_child(hierarchical_path)
 
     # if node is a complex type, check if node message node exits -> add reference to the current message node
@@ -239,7 +237,7 @@ def _process_node_variable_type(message, server, idx):
 def update_node_with_message(node, message, idx):
     """
     the method update all variable of a node or copy all values from message to node
-    IMPORT: the variable browser name of the variable node most be the same as the attribute of the message object
+    IMPORT: the variable browser name of the variable node must be the same as the attribute of the message object
     """
     value = message
     # set value if exists
@@ -277,7 +275,6 @@ def instantiate_customized(parent, node_type, node_id=None, bname=None, idx=0):
     :param idx: 
     :return: 
     """
-
     nodes = instantiate(parent, node_type, nodeid=node_id, bname=bname, idx=idx)
     new_node = nodes[0]
     _init_node_recursively(new_node, idx)
@@ -287,7 +284,7 @@ def instantiate_customized(parent, node_type, node_id=None, bname=None, idx=0):
 def _init_node_recursively(node, idx):
     """ 
     This function initiate all the sub variable with complex type of customized type of the node
-    But it seems that the instantiate function itself is a recursive realization!!!
+    TODO: the instantiate function itself is a recursive realization, try to use the original one.
     :param node: opc ua node
     :param idx:
     """
@@ -312,7 +309,7 @@ def _is_variable_and_string_type(node):
 
 def update_message_instance_with_node(message, node):
     """ the function try to update all message attribute with the help of node info.
-    NB: all node variable browse name  most be the same name als the the message attribute """
+    NB: all node variable browse name must be the same name as the the message attribute """
     variables = node.get_children(nodeclassmask=ua.NodeClass.Variable)
 
     if len(variables) > 0:
@@ -335,13 +332,11 @@ def correct_type(node, type_message):
     data_value = node.get_data_value()
     result = node.get_value()
     if isinstance(data_value, ua.DataValue):
-        if type_message.__name__ == "float":
+        if type_message.__name__ in ['float', 'double']:
             result = float(result)
-        if type_message.__name__ == "double":
-            result = float(result)
-        if type_message.__name__ == "int":
+        if type_message.__name__ == 'int':
             result = int(result) & 0xff
-        if type_message.__name__ == "Time" or type_message.__name__ == "Duration":
+        if type_message.__name__ in ['Time', 'Duration']:
             result = rospy.Time(result)
 
     else:

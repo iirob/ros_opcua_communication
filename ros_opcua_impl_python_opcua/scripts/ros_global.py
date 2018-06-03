@@ -1,4 +1,39 @@
-# GLOBAL STATIC VARIABLES
+# GLOBAL VARIABLES AND FUNCTIONS
+
+# Global functions
+from opcua import ua
+import rospy
+
+object_id_dict = {'bool': ua.ObjectIds.Boolean,
+                  'byte': ua.ObjectIds.Byte,
+                  'int': ua.ObjectIds.Int16,
+                  'int8': ua.ObjectIds.SByte,
+                  'uint8': ua.ObjectIds.Byte,
+                  'int16': ua.ObjectIds.Int16,
+                  'uint16': ua.ObjectIds.UInt16,
+                  'int32': ua.ObjectIds.Int32,
+                  'uint32': ua.ObjectIds.UInt32,
+                  'int64': ua.ObjectIds.Int64,
+                  'uint64': ua.ObjectIds.UInt64,
+                  'float': ua.ObjectIds.Float,
+                  'float32': ua.ObjectIds.Float,
+                  'float64': ua.ObjectIds.Float,
+                  'double': ua.ObjectIds.Double,
+                  'string': ua.ObjectIds.String,
+                  'str': ua.ObjectIds.String,
+                  'array': ua.ObjectIds.Enumeration,
+                  'Time': ua.ObjectIds.Time,
+                  'time': ua.ObjectIds.Time}
+
+
+def get_object_ids(type_name):
+    if type_name == 'int16':
+        rospy.logwarn('Int16??')
+    dv = object_id_dict.get(type_name, None)
+    if dv is None:
+        rospy.logerr('Can not create type with name ' + type_name)
+    return dv
+
 
 # created UA nodes in UA Server, only the ROS related nodes
 package_node_created = {}
@@ -6,6 +41,7 @@ package_node_created = {}
 packages = []
 
 # ros messages  'message' --> nodeVariableType
+messageExportPath = 'message.xml'
 messageNode = {}
 
 # ros_messages 'message' --> nodeDataType
@@ -13,20 +49,6 @@ dataTypeNode = {}
 
 # ros Topics  'topic_name' --> 'topic_node'
 topicNode = {}
-messageExportPath = "message.xml"
-
-# status string used in ros_action.py function _map_status_to_string
-status_string = {9: "Goal LOST",
-                 8: "Goal RECALLED",
-                 7: "Goal RECALLING",
-                 6: "Goal PREEMPTING",
-                 5: "Goal REJECTED",
-                 4: "Goal ABORTED",
-                 3: "Goal SUCCEEDED",
-                 2: "Goal PREEMPTED",
-                 1: "Goal ACTIVE",
-                 0: "Goal PENDING"}
-
 
 # BaseDataType
 # BaseDataVariableType

@@ -145,7 +145,7 @@ class OpcUaROSTopic:
         for name in hierarchy:
             if name != '':
                 try:
-                    nodewithsamename = self.server.find_topics_node_with_same_name(name, idx)
+                    nodewithsamename = self.server.find_topics_node_with_same_name(name)
                     if nodewithsamename is not None:
                         return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)), idx,
                                                              nodewithsamename)
