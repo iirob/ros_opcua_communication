@@ -1,6 +1,8 @@
 # GLOBAL VARIABLES AND FUNCTIONS
 
 # Global functions
+import rosgraph
+import rosnode
 from opcua import ua
 import rospy
 
@@ -33,6 +35,47 @@ def get_object_ids(type_name):
     if dv is None:
         rospy.logerr('Can not create type with name ' + type_name)
     return dv
+
+
+def next_name(hierarchy, index_of_last_processed):
+    """
+    Returns the hierarchy as one string from the first remaining part on.
+    :param hierarchy:
+    :param index_of_last_processed:
+    :return:
+    """
+    try:
+        output = ''
+        counter = index_of_last_processed + 1
+        while counter < len(hierarchy):
+            output += hierarchy[counter]
+            counter += 1
+        return output
+    except Exception as ex:
+        rospy.logerr('Error encountered ', ex)
+
+
+def own_rosnode_cleanup():
+    _, unpinged = rosnode.rosnode_ping_all()
+    if unpinged:
+        master = rosgraph.Master(rosnode.ID)
+        # noinspection PyTypeChecker
+        rosnode.cleanup_master_blacklist(master, unpinged)
+
+
+def correct_type(node, type_message):
+    data_value = node.get_data_value()
+    result = node.get_value()
+    if isinstance(data_value, ua.DataValue):
+        if type_message.__name__ in ('float', 'double'):
+            return float(result)
+        if type_message.__name__ == 'int':
+            return int(result) & 0xff
+        if type_message.__name__ in ('Time', 'Duration'):
+            return rospy.Time(result)
+    else:
+        rospy.logerr("can't convert: " + str(node.get_data_value.Value))
+        return None
 
 
 # created UA nodes in UA Server, only the ROS related nodes

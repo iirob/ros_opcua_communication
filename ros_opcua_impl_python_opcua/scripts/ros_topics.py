@@ -2,18 +2,17 @@
 
 # Thanks to:
 # https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_topic/src/rqt_topic/topic_widget.py
-import numpy
 import random
 
 import roslib
 import roslib.message
 import rospy
+import rostopic
+
 from opcua import ua, uamethod
 from opcua.ua.uaerrors import UaError
 
 import ros_actions
-import ros_server
-import rostopic
 import ros_global
 import ros_messages
 
@@ -52,7 +51,7 @@ class OpcUaROSTopic:
         # get variable type with the topic type
         variable_typ_node = ros_global.messageNode[type_name]
 
-        # create a new instance of variable type and  add to name space or topics node in namespace
+        # create a new instance of variable type and add to name space or topics node in namespace
         new_variable_node = ros_messages.instantiate_customized(parent,
                                                                 variable_typ_node,
                                                                 idx=self.idx)
@@ -132,7 +131,7 @@ class OpcUaROSTopic:
             if hasattr(self.message_instance, name):
                 if child.get_node_class() == ua.NodeClass.Variable:
                     setattr(self.message_instance, name,
-                            correct_type(child, type(getattr(self.message_instance, name))))
+                            ros_global.correct_type(child, type(getattr(self.message_instance, name))))
                 elif child.get_node_class == ua.NodeClass.Object:
                     setattr(self.message_instance, name, self.create_message_instance(child))
         return self.message_instance
@@ -147,8 +146,9 @@ class OpcUaROSTopic:
                 try:
                     nodewithsamename = self.server.find_topics_node_with_same_name(name)
                     if nodewithsamename is not None:
-                        return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)), idx,
-                                                             nodewithsamename)
+                        return self.recursive_create_objects(
+                            ros_global.next_name(hierarchy, hierarchy.index(name)), idx,
+                            nodewithsamename)
                     else:
                         # if for some reason 2 services with exactly same name are created use hack>: add random int,
                         #  prob to hit two same ints 1/10000, should be sufficient
@@ -156,35 +156,19 @@ class OpcUaROSTopic:
                             ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
 
-                        return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)),
-                                                             idx, new_parent)
+                        return self.recursive_create_objects(
+                            ros_global.next_name(hierarchy, hierarchy.index(name)),
+                            idx, new_parent)
                 # thrown when node with parent name is not existent in server
                 except (IndexError, UaError):
                     new_parent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                    return self.recursive_create_objects(ros_server.next_name(hierarchy, hierarchy.index(name)), idx,
-                                                         new_parent)
+                    return self.recursive_create_objects(
+                        ros_global.next_name(hierarchy, hierarchy.index(name)), idx,
+                        new_parent)
         return parent
-
-
-# to unsigned integers as to fulfill ros specification. Currently only uses a few different types,
-# no other types encountered so far.
-def correct_type(node, type_message):
-    data_value = node.get_data_value()
-    result = node.get_value()
-    if isinstance(data_value, ua.DataValue):
-        if type_message.__name__ == "float":
-            result = numpy.float(result)
-        if type_message.__name__ == "double":
-            result = numpy.double(result)
-        if type_message.__name__ == "int":
-            result = int(result) & 0xff
-    else:
-        rospy.logerr("can't convert: " + str(node.get_data_value.Value))
-        return None
-    return result
 
 
 def _extract_array_info(type_str):
@@ -280,7 +264,7 @@ def refresh_topics_and_actions(namespace_ros, server, topics_dict, actions_dict,
         elif numberofsubscribers(topic_name, topics_dict) <= 1 and "rosout" not in topic_name:
             topics_dict[topic_name].recursive_delete_items(server.server.get_node(ua.NodeId(topic_name, idx_topics)))
             del topics_dict[topic_name]
-            ros_server.own_rosnode_cleanup()
+            ros_global.own_rosnode_cleanup()
 
     ros_topics = rospy.get_published_topics(namespace_ros)
     # use to not get dict changed during iteration errors
@@ -295,6 +279,7 @@ def refresh_topics_and_actions(namespace_ros, server, topics_dict, actions_dict,
             to_be_deleted.append(topic_nameOPC)
     for name in to_be_deleted:
         del topics_dict[name]
+    # But this function refreshes action dict, has nothing to do with topic dict, ???
     ros_actions.refresh_dict(namespace_ros, actions_dict, topics_dict, server, idx_actions)
 
 

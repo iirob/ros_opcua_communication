@@ -70,7 +70,7 @@ class ROSServer:
         self.server.delete_nodes()
         for message in ros_messages.get_ros_msg():
             opcua_ros_message = ros_messages.OpcUaROSMessage(self, message_object_type, idx_messages, message.split()[0], message.split()[1])
-            opcua_ros_message._recursive_create_items(opcua_ros_message.parent, opcua_ros_message.idx, opcua_ros_message.message)
+            opcua_ros_message._recursive_create_items(opcua_ros_message._parent, opcua_ros_message._idx, opcua_ros_message._message)
 
         while not rospy.is_shutdown():
             # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.

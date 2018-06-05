@@ -13,29 +13,28 @@ import ros_global
 
 class OpcUaROSMessage:
     def __init__(self, server, parent, idx, message):
-        self.server = server
-        self.parent = parent
-        self.idx = idx
-        self.message = message
+        self._server = server
+        self._parent = parent
+        self._idx = idx
+        self._message = message
+        # This _node has only value assignment, no other usage, make sure and delete it
         self._nodes = {}
-        self.node = {}
         hierarchical_path = ['0:Types', '0:DataTypes', '0:BaseDataType', '0:Structure']
-        self.BaseDataType = self.server.get_root_node().get_child(hierarchical_path)
+        self._base_data_type = self._server.get_root_node().get_child(hierarchical_path)
 
-        self.message_class = None
+        self._set_message_class(message)
+        self._recursive_create_items(self._parent, self._idx, message.split('/')[0], message.split('/')[-1],
+                                     self._message_instance)
 
+    def _set_message_class(self, message):
         try:
-            self.message_class = roslib.message.get_message_class(message)
-            if not self.message_class:
+            message_class = roslib.message.get_message_class(message)
+            if not message_class:
                 raise rospy.ROSException
-            self.message_instance = self.message_class()
+            self._message_instance = message_class()
         except rospy.ROSException:
-            self.message_class = None
             rospy.logfatal("Couldn't find message class for type " + message)
             return
-
-        self._recursive_create_items(self.parent, idx, message.split('/')[0], message.split('/')[-1],
-                                     self.message_instance)
 
     def _recursive_create_items(self, parent, idx, package, message_type, message):
         # message can be an object, a complex data types or an array
@@ -52,7 +51,7 @@ class OpcUaROSMessage:
                 data_type_id = ua.NodeId(package + '/' + message_type + 'DataType',
                                          parent.nodeid.NamespaceIndex, ua.NodeIdType.String)
                 data_type_b_name = ua.QualifiedName(message_type + 'DataType', parent.nodeid.NamespaceIndex)
-                data_type_node = self.BaseDataType.add_data_type(data_type_id, data_type_b_name, description=None)
+                data_type_node = self._base_data_type.add_data_type(data_type_id, data_type_b_name, description=None)
                 # not add VariableType? Then why check VariableType in ros_server.py ?
                 new_node = parent.add_variable(ua.NodeId(package + '/' + message_type + 'Type',
                                                          parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
@@ -63,7 +62,7 @@ class OpcUaROSMessage:
                 ros_global.dataTypeNode[node_identifier] = data_type_node
 
                 # get over all message attribute and add a variable node to the new object type-node
-                for slot_name, type_name_child in zip(message.__slots__, message.__getattribute__('_slot_types')):
+                for slot_name, type_name_child in zip(message.__slots__, getattr(message, '_slot_types')):
                     base_type_str, array_size = _extract_array_info(type_name_child)
 
                     # if the slot is a simple type, add a variable node, why not directly use if????
@@ -74,7 +73,7 @@ class OpcUaROSMessage:
                         # slot is a complex type, create new message node
                         # (new instance of the class RosMessage(if it doesn't exit)
                         # and call the function recursive_create_item in constructor)
-                        attr_node = _process_node_variable_type(base_type_str, self.server, idx)
+                        attr_node = _process_node_variable_type(base_type_str, self._server, idx)
                         var_node = new_node.add_variable(ua.NodeId(package + '/' + message_type + '/' + slot_name, idx),
                                                          ua.QualifiedName(slot_name, idx),
                                                          ua.Variant(None, ua.VariantType.Null),
@@ -98,6 +97,7 @@ class OpcUaROSMessage:
                 base_instance = None
 
             if array_size is not None and hasattr(base_instance, '__slots__'):  # for array of complex objects
+                # What does this loop do?
                 for index in range(array_size):
                     print('')
             else:   # for base type and array of base types
@@ -106,8 +106,6 @@ class OpcUaROSMessage:
                 #     create new node (check it exists)
 
                 self._nodes[message_type] = new_node
-
-        return
 
 
 def _extract_array_info(type_str):
@@ -248,7 +246,7 @@ def update_node_with_message(node, message, idx):
             if len(value) > 0:
                 node.set_value(value)
         else:  # complex type
-            if type(message).__name__ == 'Time' or type(message).__name__ == 'Duration':
+            if type(message).__name__ in ('Time', 'Duration'):
                 value = message.secs
                 node.set_value(value)
                 # node.set_value(str(value))
@@ -288,7 +286,6 @@ def _init_node_recursively(node, idx):
     :param node: opc ua node
     :param idx:
     """
-
     children = node.get_children()
     if not (len(children) > 0):
         return
@@ -317,7 +314,7 @@ def update_message_instance_with_node(message, node):
             attr_name = var.get_browse_name().Name
             if hasattr(message, attr_name):
                 if len(var.get_children(nodeclassmask=ua.NodeClass.Variable)) == 0:  # primitive type
-                    setattr(message, attr_name, correct_type(var, type(getattr(message, attr_name))))
+                    setattr(message, attr_name, ros_global.correct_type(var, type(getattr(message, attr_name))))
                     # var.get_value())
                     # setattr(message, attr_name, var.get_value())
                 else:     # complex type
@@ -325,21 +322,4 @@ def update_message_instance_with_node(message, node):
 
     return message
     # if has variables recursion
-    # else  update value
-
-
-def correct_type(node, type_message):
-    data_value = node.get_data_value()
-    result = node.get_value()
-    if isinstance(data_value, ua.DataValue):
-        if type_message.__name__ in ['float', 'double']:
-            result = float(result)
-        if type_message.__name__ == 'int':
-            result = int(result) & 0xff
-        if type_message.__name__ in ['Time', 'Duration']:
-            result = rospy.Time(result)
-
-    else:
-        rospy.logerr("can't convert: " + str(node.get_data_value.Value))
-        return None
-    return result
+    # else update value
