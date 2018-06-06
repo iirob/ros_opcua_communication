@@ -264,7 +264,7 @@ def refresh_topics_and_actions(namespace_ros, server, topics_dict, actions_dict,
         elif numberofsubscribers(topic_name, topics_dict) <= 1 and "rosout" not in topic_name:
             topics_dict[topic_name].recursive_delete_items(server.server.get_node(ua.NodeId(topic_name, idx_topics)))
             del topics_dict[topic_name]
-            ros_global.own_rosnode_cleanup()
+            ros_global.rosnode_cleanup()
 
     ros_topics = rospy.get_published_topics(namespace_ros)
     # use to not get dict changed during iteration errors

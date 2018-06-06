@@ -342,7 +342,7 @@ class OpcUaROSAction:
             self.recursive_delete_items(child)
             self.server.server.delete_nodes([child])
         self.server.server.delete_nodes([self.result, self.result_node, self.goal_node, self.goal, self.parent])
-        ros_global.own_rosnode_cleanup()
+        ros_global.rosnode_cleanup()
 
     def update_result(self, state, result):
         rospy.logdebug("updated result cb reached")
@@ -418,13 +418,13 @@ def refresh_dict(namespace_ros, actions_dict, topics_dict, server, idx_actions):
     for actionNameOPC in actions_dict:
         found = False
         for topicROS, topic_type in topics:
-            ros_global.own_rosnode_cleanup()
+            ros_global.rosnode_cleanup()
             if actionNameOPC in topicROS:
                 found = True
         if not found:
             actions_dict[actionNameOPC].recursive_delete_items(actions_dict[actionNameOPC].parent)
             to_be_deleted.append(actionNameOPC)
             rospy.logdebug("deleting action: " + actionNameOPC)
-            ros_global.own_rosnode_cleanup()
+            ros_global.rosnode_cleanup()
     for name in to_be_deleted:
         del actions_dict[name]

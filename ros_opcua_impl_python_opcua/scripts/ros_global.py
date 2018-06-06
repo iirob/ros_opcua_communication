@@ -55,7 +55,7 @@ def next_name(hierarchy, index_of_last_processed):
         rospy.logerr('Error encountered ', ex)
 
 
-def own_rosnode_cleanup():
+def rosnode_cleanup():
     _, unpinged = rosnode.rosnode_ping_all()
     if unpinged:
         master = rosgraph.Master(rosnode.ID)

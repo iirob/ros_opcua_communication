@@ -102,17 +102,6 @@ class OpcUaROSService:
         setattr(sample, name, obj)
         return already_set, counter
 
-    def recursive_delete_items(self, item):
-        self._proxy.close()
-        for child in item.get_children():
-            self.recursive_delete_items(child)
-            # No place to append data in the _node list, the if block is maybe meaningless
-            if child in self._nodes:
-                del self._nodes[child]
-            self._server.server.delete_nodes([child])
-        self._server.server.delete_nodes([self.method])
-        ros_global.own_rosnode_cleanup()
-
     def recursive_create_objects(self, name, idx, parent):
         hierarchy = [element for element in name.split('/') if element]
         if len(hierarchy) <= 1:
@@ -196,7 +185,11 @@ def remove_inactive_services(server, service_dict):
     ros_services = rosservice.get_service_list()
     for service_nameOPC in service_dict.keys():
         if service_nameOPC not in ros_services:
-            server.server.delete_nodes(service_dict[service_nameOPC], recursive=True)
-        if len(service_dict[service_nameOPC].parent.get_children()) == 0:
-            server.server.delete_nodes([service_dict[service_nameOPC].parent])
-        del service_dict[service_nameOPC]
+            if len(service_dict[service_nameOPC].parent.get_children()) <= 1:
+                target_node = service_dict[service_nameOPC].parent
+            else:
+                target_node = service_dict[service_nameOPC]
+            server.server.delete_nodes(target_node, recursive=True)
+            del service_dict[service_nameOPC]
+
+    ros_global.rosnode_cleanup()
