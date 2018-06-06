@@ -33,7 +33,8 @@ class OpcUaROSService:
         rospy.loginfo('Created ROS Service with name: ' + self._name)
 
     @uamethod
-    def _call_service(self, *inputs):
+    def _call_service(self, parent, *inputs):
+        rospy.logdebug('Parent of the method is: ' + parent.to_string())
         try:
             rospy.loginfo('Calling Service with name: ' + self._name)
             input_msg = self.create_message_instance(inputs, self._service_req)
@@ -46,6 +47,8 @@ class OpcUaROSService:
                 rospy.logdebug('Converting slot: ' + str(getattr(response, slot)))
                 return_values.append(getattr(response, slot))
                 rospy.logdebug('Current Response list: ' + str(return_values))
+            if len(return_values) == 0:
+                return None
             return return_values
         except (TypeError, rospy.ROSException, rospy.ROSInternalException, rospy.ROSSerializationException,
                 UaError, rosservice.ROSServiceException) as e:
@@ -136,10 +139,10 @@ class OpcUaROSService:
         return parent
 
 
-def get_args(sample_req):
+def get_args(arg_class):
     array = []
-    for slot_name, type_name_child in zip(sample_req.__slots__, getattr(sample_req, '_slot_types')):
-        slot = getattr(sample_req, slot_name)
+    for slot_name, type_name_child in zip(arg_class.__slots__, getattr(arg_class, '_slot_types')):
+        slot = getattr(arg_class, slot_name)
         if hasattr(slot, '_type'):  # clearly not needed
             array_to_merge = get_args(slot)
             array.extend(array_to_merge)
@@ -168,28 +171,28 @@ def refresh_services(namespace_ros, server, service_dict, idx, services_object_o
 
     for service_name_ros in ros_services:
         try:
-            if service_name_ros not in service_dict or service_dict[service_name_ros] is None:
+            if service_name_ros not in service_dict.keys():
                 service = OpcUaROSService(server, services_object_opc, idx, service_name_ros)
                 service_dict[service_name_ros] = service
         except (rosservice.ROSServiceException, rosservice.ROSServiceIOException) as e:
-            try:
-                rospy.logerr('Error when trying to refresh services', e)
-            except TypeError as e2:
-                rospy.logerr('Error when logging an Exception, can not convert everything to string', e2)
+            rospy.logerr('Error when trying to refresh services', e)
 
     remove_inactive_services(server, service_dict)
 
 
 def remove_inactive_services(server, service_dict):
     # TODO: the to be deleted methods can be cached in maybe another list, to accelerate the speed of creating services
+    # TODO: Reorganize the objects in address space so that the ros_node can be deleted recursively
     ros_services = rosservice.get_service_list()
+    delete_targets = []
     for service_nameOPC in service_dict.keys():
         if service_nameOPC not in ros_services:
             if len(service_dict[service_nameOPC].parent.get_children()) <= 1:
                 target_node = service_dict[service_nameOPC].parent
             else:
-                target_node = service_dict[service_nameOPC]
-            server.server.delete_nodes(target_node, recursive=True)
+                target_node = service_dict[service_nameOPC].method
+            delete_targets.append(target_node)
             del service_dict[service_nameOPC]
+    server.server.delete_nodes(delete_targets, recursive=True)
 
     ros_global.rosnode_cleanup()
