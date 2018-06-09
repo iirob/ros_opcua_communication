@@ -2,7 +2,6 @@ import roslib
 import roslib.message
 import rospy
 
-from subprocess import Popen, PIPE
 from datetime import datetime
 
 from opcua import ua
@@ -10,31 +9,68 @@ from opcua.common.instantiate import instantiate
 
 import ros_global
 
+ros_build_in_data_types = {'bool': [False, ua.ObjectIds.Boolean],
+                           'int8': [0, ua.ObjectIds.SByte],
+                           'uint8': [0, ua.ObjectIds.Byte],
+                           'int16': [0, ua.ObjectIds.Int16],
+                           'uint16': [0, ua.ObjectIds.UInt16],
+                           'int32': [0, ua.ObjectIds.Int32],
+                           'uint32': [0, ua.ObjectIds.UInt32],
+                           'int64': [0, ua.ObjectIds.Int64],
+                           'uint64': [0, ua.ObjectIds.UInt64],
+                           'float32': [0, ua.ObjectIds.Float],
+                           'float64': [0, ua.ObjectIds.Float],
+                           'string': [None, ua.ObjectIds.String],
+                           'time': [None, ua.ObjectIds.Time],
+                           'duration': [0, ua.ObjectIds.Duration]}
+
+created_data_types = {}
+created_variable_types = {}
+
+
+def _get_message_class(message):
+    try:
+        message_class = roslib.message.get_message_class(message)
+        if not message_class:
+            raise rospy.ROSException
+        return message_class()
+    except rospy.ROSException:
+        rospy.logfatal("Couldn't find message class for type " + message)
+        return None
+
 
 class OpcUaROSMessage:
-    def __init__(self, server, parent, idx, message):
+    def __init__(self, server, parent, idx, data_node, message):
         self._server = server
-        self._parent = parent
+        self._variable_type_root = parent
         self._idx = idx
         self._message = message
-        # This _node has only value assignment, no other usage, make sure and delete it
-        self._nodes = {}
-        hierarchical_path = ['0:Types', '0:DataTypes', '0:BaseDataType', '0:Structure']
-        self._base_data_type = self._server.get_root_node().get_child(hierarchical_path)
+        self._data_type_root = data_node
 
-        self._set_message_class(message)
-        self._recursive_create_items(self._parent, self._idx, message.split('/')[0], message.split('/')[-1],
+        self._message_instance = _get_message_class(message)
+        self._recursive_create_items(self._variable_type_root, self._idx, message.split('/')[0], message.split('/')[-1],
                                      self._message_instance)
 
-    def _set_message_class(self, message):
-        try:
-            message_class = roslib.message.get_message_class(message)
-            if not message_class:
-                raise rospy.ROSException
-            self._message_instance = message_class()
-        except rospy.ROSException:
-            rospy.logfatal("Couldn't find message class for type " + message)
-            return
+    def _recursively_create_message(self, msg):
+        message = _get_message_class(msg)
+        for variable_type, data_type in zip(message.__slots__, getattr(message, '_slot_types')):
+            base_type_str, array_size = _extract_array_info(data_type)
+            if base_type_str not in ros_build_in_data_types.keys() and base_type_str not in created_data_types.keys():
+                self._recursively_create_message(base_type_str)
+
+            else:
+                new_data_type = self._data_type_root.add_data_node(
+                    ua.NodeId(ros_global.get_counter(), self._idx),
+                    ua.QualifiedName(base_type_str, self._idx),
+                    data_type)
+                created_data_types[base_type_str] = new_data_type.nodeid
+
+                new_variable_type = self._variable_type_root.add_variable_type(
+                    ua.NodeId(ros_global.get_counter(), self._idx),
+                    ua.QualifiedName(base_type_str + 'Type', self._idx),
+                    new_data_type.nodeid)
+                created_variable_types[base_type_str] = new_variable_type.nodeid
+                # add data type, recursion, add variable type, then add variable
 
     def _recursive_create_items(self, parent, idx, package, message_type, message):
         # message can be an object, a complex data types or an array
@@ -44,19 +80,15 @@ class OpcUaROSMessage:
             # get node if it exists or create a new node
 
             node_identifier = package + '/' + message_type
-            # if node_identifier in ros_global.messageNode.keys():
-            #     node = ros_global.messageNode[node_identifier]
             if node_identifier not in ros_global.messageNode.keys():
-                # add new object type node
                 data_type_id = ua.NodeId(package + '/' + message_type + 'DataType',
                                          parent.nodeid.NamespaceIndex, ua.NodeIdType.String)
                 data_type_b_name = ua.QualifiedName(message_type + 'DataType', parent.nodeid.NamespaceIndex)
-                data_type_node = self._base_data_type.add_data_type(data_type_id, data_type_b_name, description=None)
-                # not add VariableType? Then why check VariableType in ros_server.py ?
+                data_type_node = self._data_type_root.add_data_type(data_type_id, data_type_b_name, description=None)
                 new_node = parent.add_variable(ua.NodeId(package + '/' + message_type + 'Type',
                                                          parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                                ua.QualifiedName(message_type+'Type', parent.nodeid.NamespaceIndex),
-                                               data_type_node.nodeid)
+                                               ua.Variant(None, ua.VariantType.Null), datatype=data_type_node.nodeid)
 
                 ros_global.messageNode[node_identifier] = new_node
                 ros_global.dataTypeNode[node_identifier] = data_type_node
@@ -73,7 +105,7 @@ class OpcUaROSMessage:
                         # slot is a complex type, create new message node
                         # (new instance of the class RosMessage(if it doesn't exit)
                         # and call the function recursive_create_item in constructor)
-                        attr_node = _process_node_variable_type(base_type_str, self._server, idx)
+                        attr_node = _process_node_variable_type(base_type_str, self._server, idx, self._data_type_root)
                         var_node = new_node.add_variable(ua.NodeId(package + '/' + message_type + '/' + slot_name, idx),
                                                          ua.QualifiedName(slot_name, idx),
                                                          ua.Variant(None, ua.VariantType.Null),
@@ -101,15 +133,12 @@ class OpcUaROSMessage:
                 for index in range(array_size):
                     print('')
             else:   # for base type and array of base types
-                new_node = _create_node_with_type(parent, package, message_type, message, array_size)
+                _create_node_with_type(parent, package, message_type, message, array_size)
                 # if new_node is None:
                 #     create new node (check it exists)
 
-                self._nodes[message_type] = new_node
-
 
 def _extract_array_info(type_str):
-    # TODO: correct set the array_size of a scala, i.e. -1 according to the documentation.
     array_size = None
     if '[' in type_str and type_str[-1] == ']':
         type_str, array_size_str = type_str.split('[', 1)
@@ -120,15 +149,6 @@ def _extract_array_info(type_str):
             array_size = 0
 
     return type_str, array_size
-
-
-def get_ros_msg():
-    """
-    Same as execute 'rosmsg list' in terminal
-    :return: a list with msgs
-    """
-    out, _ = Popen(['rosmsg', 'list'], stdin=PIPE, stdout=PIPE, stderr=PIPE).communicate()
-    return out.split()
 
 
 def _create_node_with_type(parent, package, message_name, type_name, array_size, prop=True):
@@ -200,7 +220,7 @@ def _create_node_with_type(parent, package, message_name, type_name, array_size,
     return node
 
 
-def _process_node_variable_type(message, server, idx):
+def _process_node_variable_type(message, server, idx, data_type_root):
     """
     This function check if a node related to a message has been added and return the node if it exists,
      if node doesn't exit create a new object RosMessage and call the function _recursive_create_item 
@@ -226,7 +246,7 @@ def _process_node_variable_type(message, server, idx):
             ros_global.package_node_created[package] = package_node
         else:
             package_node = ros_global.package_node_created.get(package)
-        OpcUaROSMessage(server, package_node, idx, message)
+        OpcUaROSMessage(server, package_node, idx, data_type_root, message)
         node = ros_global.messageNode[message]
 
     return node
@@ -323,3 +343,22 @@ def update_message_instance_with_node(message, node):
     return message
     # if has variables recursion
     # else update value
+
+# elif base_type_str in ros_build_in_data_types.keys():
+# node = self._variable_type_root.add_property(ua.NodeId(ros_global.get_counter(), self._idx),
+#                                              ua.QualifiedName(base_type_str, self._idx),
+#                                              ros_build_in_data_types[base_type_str][0],
+#                                              ros_build_in_data_types[base_type_str][1],
+#                                              ua.NodeId(ros_build_in_data_types[base_type_str][1]))
+# elif base_type_str in created_data_types.keys():
+# node = self._variable_type_root.add_variable(ua.NodeId(ros_global.get_counter(), self._idx),
+#                                              ua.QualifiedName(base_type_str, self._idx),
+#                                              None,
+#                                              varianttype=created_variable_types[variable_type],
+#                                              datatype=created_data_types[base_type_str])
+# if array_size is not None:
+#     node.set_value_rank(1)  # is a array
+#     if array_size > 1:  # or zero  [] or [n]
+#         node.set_array_dimensions([array_size])
+# if data_type not in ros_build_in_data_types.keys():
+#     data_type_id = ua.NodeId()

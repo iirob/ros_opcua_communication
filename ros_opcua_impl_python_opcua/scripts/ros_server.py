@@ -21,7 +21,7 @@ class ROSServer:
 
         self.server = Server()
 
-        self.server.set_endpoint('opc.tcp://0.0.0.0:21554/')
+        self.server.set_endpoint('opc.tcp://10.1.250.39:21554/')
         self.server.set_server_name('ROS ua Server')
         self._namespace_ros = rospy.get_param('/rosopcua/namespace')
 

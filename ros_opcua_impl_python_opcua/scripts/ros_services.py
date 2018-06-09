@@ -37,7 +37,8 @@ class OpcUaROSService:
         rospy.logdebug('Parent of the method is: ' + parent.to_string())
         try:
             rospy.loginfo('Calling Service with name: ' + self._name)
-            input_msg = self.create_message_instance(inputs, self._service_req)
+            # TODO: Refactor here after the get_args function is deleted
+            input_msg = type(self._service_req)(*inputs)
             rospy.logdebug('Created Input Request for Service %s : %s' % (self._name, str(input_msg)))
             response = self._proxy(input_msg)
             rospy.logdebug('got response: ' + str(response))
@@ -53,57 +54,6 @@ class OpcUaROSService:
         except (TypeError, rospy.ROSException, rospy.ROSInternalException, rospy.ROSSerializationException,
                 UaError, rosservice.ROSServiceException) as e:
             rospy.logerr('Error when calling service ' + self._name, e)
-
-    def create_message_instance(self, inputs, sample):
-        rospy.logdebug('Creating message for goal call')
-        already_set = []
-        if isinstance(inputs, tuple):
-            arg_counter = 0
-            object_counter = 0
-            while arg_counter < len(inputs) and object_counter < len(sample.__slots__):
-                cur_arg = inputs[arg_counter]
-                cur_slot = sample.__slots__[object_counter]
-                real_slot = getattr(sample, cur_slot)
-                rospy.logdebug(
-                    'cur_arg: ' + str(cur_arg) + ' cur_slot_name: ' + str(cur_slot) + ' real slot content: ' + str(
-                        real_slot))
-                if hasattr(real_slot, '_type'):
-                    rospy.logdebug('We found an object with name ' + str(cur_slot) + ', creating it recursively')
-                    already_set, arg_counter = self.create_object_instance(already_set, real_slot, cur_slot,
-                                                                           arg_counter, inputs, sample)
-                    object_counter += 1
-                else:
-                    already_set.append(cur_slot)
-                    # set the attribute in the request
-                    setattr(sample, cur_slot, cur_arg)
-                    arg_counter += 1
-                    object_counter += 1
-
-        return sample
-
-    def create_object_instance(self, already_set, obj, name, counter, inputs, sample):
-        rospy.loginfo('Create Object Instance Notify')
-        object_counter = 0
-        while object_counter < len(obj.__slots__) and counter < len(inputs):
-            cur_arg = inputs[counter]
-            cur_slot = obj.__slots__[object_counter]
-            real_slot = getattr(obj, cur_slot)
-            rospy.loginfo(
-                'cur_arg: ' + str(cur_arg) + ' cur_slot_name: ' + str(cur_slot) + ' real slot content: ' + str(
-                    real_slot))
-            if hasattr(real_slot, '_type'):
-                rospy.logdebug('Recursive Object found in request/response of service call')
-                already_set, counter = self.create_object_instance(already_set, real_slot, cur_slot, counter, inputs,
-                                                                   sample)
-                object_counter += 1
-            else:
-                already_set.append(cur_slot)
-                setattr(obj, cur_slot, cur_arg)
-                object_counter += 1
-                counter += 1
-                # sets the object as an attribute in the request were trying to build
-        setattr(sample, name, obj)
-        return already_set, counter
 
     def recursive_create_objects(self, name, idx, parent):
         hierarchy = [element for element in name.split('/') if element]

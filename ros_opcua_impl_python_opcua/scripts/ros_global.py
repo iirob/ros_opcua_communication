@@ -1,10 +1,13 @@
 # GLOBAL VARIABLES AND FUNCTIONS
-
-# Global functions
 import rosgraph
 import rosnode
-from opcua import ua
 import rospy
+import rosmsg
+from rosmsg import *
+
+from opcua import ua
+
+ID_COUNTER = 0
 
 object_id_dict = {'bool': ua.ObjectIds.Boolean,
                   'byte': ua.ObjectIds.Byte,
@@ -35,6 +38,41 @@ def get_object_ids(type_name):
     if dv is None:
         rospy.logerr('Can not create type with name ' + type_name)
     return dv
+
+
+def get_counter():
+    global ID_COUNTER
+    ID_COUNTER += 1
+    return ID_COUNTER
+
+
+def get_ros_packages():
+    """
+    same as the command line 'rosmsg packages'
+    :return: ROS messages as a list
+    """
+    return sorted([x for x in iterate_packages(rospkg.RosPack(), MODE_MSG)])
+
+
+def get_ros_msg():
+    """
+    same as the command line 'rosmsg list'
+    :return: list of [ros package, message] pairs
+    """
+    ret = []
+    ros_packages = get_ros_packages()
+    for (p, directory) in ros_packages:
+        for file_name in getattr(rosmsg, '_list_types')(directory, 'msg', MODE_MSG):
+            ret.append(p + '/' + file_name)
+    return ret
+
+
+def get_ros_package(package_name):
+    return list_types(package_name, mode=MODE_MSG)
+
+
+def get_ros_msg_md5(package_name):
+    return rosmsg_md5(MODE_MSG, package_name)
 
 
 def next_name(hierarchy, index_of_last_processed):
@@ -97,3 +135,6 @@ topicNode = {}
 # BaseDataVariableType
 
 # baseDataVariableType_node = ;
+
+if __name__ == '__main__':
+    print(get_ros_msg())
