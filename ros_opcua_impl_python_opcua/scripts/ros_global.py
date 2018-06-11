@@ -7,8 +7,6 @@ from rosmsg import *
 
 from opcua import ua
 
-ID_COUNTER = 0
-
 object_id_dict = {'bool': ua.ObjectIds.Boolean,
                   'byte': ua.ObjectIds.Byte,
                   'int': ua.ObjectIds.Int16,
@@ -38,12 +36,6 @@ def get_object_ids(type_name):
     if dv is None:
         rospy.logerr('Can not create type with name ' + type_name)
     return dv
-
-
-def get_counter():
-    global ID_COUNTER
-    ID_COUNTER += 1
-    return ID_COUNTER
 
 
 def get_ros_packages():
@@ -123,6 +115,7 @@ packages = []
 
 # ros messages  'message' --> nodeVariableType
 messageExportPath = 'message.xml'
+new_messageExportPath = 'new_message.xml'
 messageNode = {}
 
 # ros_messages 'message' --> nodeDataType
