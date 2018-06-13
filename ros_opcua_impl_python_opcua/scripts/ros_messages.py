@@ -71,6 +71,8 @@ class OpcUaROSMessage:
             self._create_data_and_variable_type(msg_type_str)
         # handle subtypes
         message = _get_message_class(msg)
+        if not message:
+            return
         for variable_type, data_type in zip(message.__slots__, getattr(message, '_slot_types')):
             base_type_str, array_size = _extract_array_info(data_type)
             if self._is_new_type(base_type_str):
