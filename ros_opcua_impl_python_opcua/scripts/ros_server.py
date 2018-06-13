@@ -1,4 +1,5 @@
 #!/usr/bin/python
+
 import time
 import logging
 
@@ -21,7 +22,7 @@ class ROSServer:
 
         self.server = Server()
 
-        self.server.set_endpoint('opc.tcp://10.1.250.39:21554/')
+        self.server.set_endpoint('opc.tcp://0.0.0.0:21554/')
         self.server.set_server_name('ROS ua Server')
         self._namespace_ros = rospy.get_param('/rosopcua/namespace')
 
@@ -29,7 +30,7 @@ class ROSServer:
         self._idx_topics = self.server.register_namespace('http://ros.org/topics')
         self._idx_services = self.server.register_namespace('http://ros.org/service')
         self._idx_actions = self.server.register_namespace('http://ros.org/actions')
-        # idx_messages = self.server.register_namespace(uri_messages)
+        # idx_messages = self.server.register_namespace('http://ros.org/messages')
 
         # get objects node
         objects = self.server.get_objects_node()

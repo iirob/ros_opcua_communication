@@ -5,7 +5,7 @@ import rospy
 import rosmsg
 from rosmsg import *
 
-from opcua import ua
+from opcua import ua, Server
 
 object_id_dict = {'bool': ua.ObjectIds.Boolean,
                   'byte': ua.ObjectIds.Byte,
@@ -38,33 +38,45 @@ def get_object_ids(type_name):
     return dv
 
 
-def get_ros_packages():
+def _get_ros_packages(mode):
     """
     same as the command line 'rosmsg packages'
     :return: ROS messages as a list
     """
-    return sorted([x for x in iterate_packages(rospkg.RosPack(), MODE_MSG)])
+    return sorted([x for x in iterate_packages(rospkg.RosPack(), mode)])
 
 
-def get_ros_msg():
-    """
-    same as the command line 'rosmsg list'
-    :return: list of [ros package, message] pairs
-    """
+def _get_ros_msg(mode):
     ret = []
-    ros_packages = get_ros_packages()
+    if mode == MODE_MSG:
+        suffix = 'msg'
+    else:
+        suffix = 'srv'
+    ros_packages = _get_ros_packages(mode)
     for (p, directory) in ros_packages:
-        for file_name in getattr(rosmsg, '_list_types')(directory, 'msg', MODE_MSG):
+        for file_name in getattr(rosmsg, '_list_types')(directory, suffix, mode):
             ret.append(p + '/' + file_name)
     return ret
 
 
+def get_ros_messages():
+    """
+    same as the command line 'rosmsg list'
+    :return: list of ros package/message pairs
+    """
+    return _get_ros_msg(MODE_MSG)
+
+
+def get_ros_services():
+    """
+    same as the command line 'rossrv list'
+    :return: list of ros package/service pairs
+    """
+    return _get_ros_msg(MODE_SRV)
+
+
 def get_ros_package(package_name):
     return list_types(package_name, mode=MODE_MSG)
-
-
-def get_ros_msg_md5(package_name):
-    return rosmsg_md5(MODE_MSG, package_name)
 
 
 def next_name(hierarchy, index_of_last_processed):
@@ -89,7 +101,6 @@ def rosnode_cleanup():
     _, unpinged = rosnode.rosnode_ping_all()
     if unpinged:
         master = rosgraph.Master(rosnode.ID)
-        # noinspection PyTypeChecker
         rosnode.cleanup_master_blacklist(master, unpinged)
 
 
@@ -106,6 +117,23 @@ def correct_type(node, type_message):
     else:
         rospy.logerr("can't convert: " + str(node.get_data_value.Value))
         return None
+
+
+class BasicROSServer:
+    def __init__(self):
+        self._server = Server()
+
+        self._server.set_endpoint('opc.tcp://0.0.0.0:21554/')
+        self._server.set_server_name('ROS UA Server')
+
+    def __enter__(self):
+        self._server.start()
+        rospy.init_node('rosopcua', log_level=rospy.INFO)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._server.stop()
+        quit()
 
 
 # created UA nodes in UA Server, only the ROS related nodes
@@ -130,4 +158,4 @@ topicNode = {}
 # baseDataVariableType_node = ;
 
 if __name__ == '__main__':
-    print(get_ros_msg())
+    print(get_ros_services())

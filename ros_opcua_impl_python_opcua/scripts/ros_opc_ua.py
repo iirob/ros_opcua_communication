@@ -9,7 +9,7 @@ ROS_BUILD_IN_DATA_TYPES = {'bool': [False, ua.ObjectIds.Boolean],
                            'int8': [0, ua.ObjectIds.SByte],
                            'byte': [0, ua.ObjectIds.SByte],  # deprecated int8
                            'uint8': [0, ua.ObjectIds.Byte],
-                           'char': [0, ua.ObjectIds.SByte],  # deprecated uint8
+                           'char': [0, ua.ObjectIds.Byte],  # deprecated uint8
                            'int16': [0, ua.ObjectIds.Int16],
                            'uint16': [0, ua.ObjectIds.UInt16],
                            'int32': [0, ua.ObjectIds.Int32],

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Thanks to:
 # https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_service_caller/src/rqt_service_caller/service_caller_widget.py
 import random

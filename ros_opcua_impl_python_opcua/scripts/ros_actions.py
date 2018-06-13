@@ -17,16 +17,16 @@ from roslib import message
 import ros_global
 import ros_topics
 
-status_string = {9: 'Goal LOST',
-                 8: 'Goal RECALLED',
-                 7: 'Goal RECALLING',
-                 6: 'Goal PREEMPTING',
-                 5: 'Goal REJECTED',
-                 4: 'Goal ABORTED',
-                 3: 'Goal SUCCEEDED',
-                 2: 'Goal PREEMPTED',
-                 1: 'Goal ACTIVE',
-                 0: 'Goal PENDING'}
+ROS_GOAL_STATUS = {9: 'Goal LOST',
+                   8: 'Goal RECALLED',
+                   7: 'Goal RECALLING',
+                   6: 'Goal PREEMPTING',
+                   5: 'Goal REJECTED',
+                   4: 'Goal ABORTED',
+                   3: 'Goal SUCCEEDED',
+                   2: 'Goal PREEMPTED',
+                   1: 'Goal ACTIVE',
+                   0: 'Goal PENDING'}
 
 
 class OpcUaROSAction:
@@ -409,7 +409,7 @@ def _get_arg_array(goal_class):
 
 
 def _map_status_to_string(param):
-    return status_string.get(param, 'Invalid Status!')
+    return ROS_GOAL_STATUS.get(param, 'Invalid Status!')
 
 
 def refresh_dict(namespace_ros, actions_dict, topics_dict, server, idx_actions):
