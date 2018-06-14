@@ -26,7 +26,7 @@ class ROSServer(BasicROSServer):
 if __name__ == '__main__':
     try:
         with ROSServer() as ua_server:
-            ua_server._create_messages()
+            ua_server.export_messages()
             rospy.spin()
     except Exception as e:
         print(e.message)

@@ -13,26 +13,26 @@ class OpcUaROSMessage:
         self.created_variable_types = {}
 
         vt_base_node = self._server.nodes.base_variable_type.get_child('0:BaseDataVariableType')
-        self._vt_root = create_ros_variable_type(vt_base_node, nodeid_generator(self._idx),
-                                                 ua.QualifiedName('ROSMessageType', self._idx),
-                                                 vt_base_node.get_data_type(), is_abstract=True)
+        self._vt_root = create_variable_type(vt_base_node, nodeid_generator(self._idx),
+                                             ua.QualifiedName('ROSMessageType', self._idx),
+                                             vt_base_node.get_data_type())
 
         dt_base_node = self._server.nodes.base_data_type.get_child('0:Structure')
-        self._dt_root = create_ros_data_type(dt_base_node, nodeid_generator(self._idx),
-                                             ua.QualifiedName('ROSMessage', self._idx), is_abstract=True)
+        self._dt_root = create_data_type(dt_base_node, nodeid_generator(self._idx),
+                                         ua.QualifiedName('ROSMessage', self._idx), is_abstract=True)
 
     def _is_new_type(self, message):
         return message not in ROS_BUILD_IN_DATA_TYPES.keys() and message not in self.created_data_types.keys()
 
     def _create_data_and_variable_type(self, type_name):
-        new_dt = create_ros_data_type(self._dt_root, nodeid_generator(self._idx),
-                                      ua.QualifiedName(type_name, self._idx))
+        new_dt = create_data_type(self._dt_root, nodeid_generator(self._idx),
+                                  ua.QualifiedName(type_name, self._idx))
         self.created_data_types[type_name] = new_dt
 
         # According to convention, variable type should end with Type
         vt_name = type_name + 'Type'
-        new_vt = create_ros_variable_type(self._vt_root, nodeid_generator(self._idx),
-                                          ua.QualifiedName(vt_name, self._idx), new_dt.nodeid)
+        new_vt = create_variable_type(self._vt_root, nodeid_generator(self._idx),
+                                      ua.QualifiedName(vt_name, self._idx), new_dt.nodeid)
         self.created_variable_types[vt_name] = new_vt
 
     def _recursively_create_message(self, msg):
@@ -51,14 +51,14 @@ class OpcUaROSMessage:
 
             current_variable_type = self.created_variable_types[msg + 'Type']
             if base_type_str in ROS_BUILD_IN_DATA_TYPES.keys():
-                create_ros_property(current_variable_type, nodeid_generator(self._idx),
-                                    ua.QualifiedName(variable_type, self._idx), array_size,
-                                    *ROS_BUILD_IN_DATA_TYPES[base_type_str])
+                create_property(current_variable_type, nodeid_generator(self._idx),
+                                ua.QualifiedName(variable_type, self._idx), array_size,
+                                *ROS_BUILD_IN_DATA_TYPES[base_type_str])
             else:
-                create_ros_variable(current_variable_type, nodeid_generator(self._idx),
-                                    ua.QualifiedName(variable_type, self._idx),
-                                    self.created_variable_types[base_type_str + 'Type'].nodeid,
-                                    self.created_data_types[base_type_str].nodeid, array_size)
+                create_variable(current_variable_type, nodeid_generator(self._idx),
+                                ua.QualifiedName(variable_type, self._idx),
+                                self.created_variable_types[base_type_str + 'Type'].nodeid,
+                                self.created_data_types[base_type_str].nodeid, array_size)
 
     def create_messages(self):
         messages = get_ros_messages()

@@ -1,5 +1,9 @@
 from datetime import datetime
+
 from opcua import ua
+from opcua.common import node
+
+ID_COUNTER = 0
 
 ROS_BUILD_IN_DATA_TYPES = {'bool': [False, ua.ObjectIds.Boolean],
                            'int8': [0, ua.ObjectIds.SByte],
@@ -18,8 +22,6 @@ ROS_BUILD_IN_DATA_TYPES = {'bool': [False, ua.ObjectIds.Boolean],
                            'time': [datetime.utcnow(), ua.ObjectIds.DateTime],
                            'duration': [0, ua.ObjectIds.Duration]}
 
-ID_COUNTER = 0
-
 
 def _get_counter():
     global ID_COUNTER
@@ -27,48 +29,104 @@ def _get_counter():
     return ID_COUNTER
 
 
-def _process_ros_array(array_length, ua_node):
+def _process_ros_array(array_length, attributes):
     """
     NOTE: ROS only support 1 dimensional array, therefore the array dimension list has only
-     one member, array_length = 0 indicates an array with variable length
-    :param array_length: None represents a scalar
-    :param ua_node: node to be processed
-    :return
+     one member, array_length = 0 indicates a variable length of the arr
+    :param array_length: None represents a scalar, 0 represents an array variable length
+    :param attributes:
+    :return:
     """
     if array_length is not None:
-        ua_node.set_value_rank(ua.ValueRank.OneDimension)
-        ua_node.set_array_dimensions([array_length])
+        attributes.ValueRank = ua.ValueRank.OneDimension
+        attributes.ArrayDimensions = [array_length]
     else:
-        ua_node.set_value_rank(ua.ValueRank.Scalar)
+        attributes.ValueRank = ua.ValueRank.Scalar
 
 
-def create_ros_variable(parent, nodeid, bname, variable_type_id, data_type_id, array_length):
-    val = ua.Variant(ua.VariantType.Null)
-    new_node = parent.add_variable(nodeid, bname, val, datatype=data_type_id, custom_variable_type=variable_type_id)
+def _create_variable(parent, nodeid, bname, variable_type_id, data_type_id, array_length, is_property=False):
+    addnode = ua.AddNodesItem()
+    addnode.RequestedNewNodeId = nodeid
+    addnode.BrowseName = bname
+    addnode.NodeClass = ua.NodeClass.Variable
+    addnode.ParentNodeId = parent.nodeid
+    if is_property:
+        addnode.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasProperty)
+        addnode.TypeDefinition = ua.NodeId(ua.ObjectIds.PropertyType)
+    else:
+        addnode.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasComponent)
+        addnode.TypeDefinition = variable_type_id
+    attrs = ua.VariableAttributes()
+    attrs.Description = ua.LocalizedText(bname.Name)
+    attrs.DisplayName = ua.LocalizedText(bname.Name)
+    attrs.DataType = data_type_id
+    _process_ros_array(array_length, attrs)
+    attrs.WriteMask = 0
+    attrs.UserWriteMask = 0
+    attrs.Historizing = 0
+    attrs.AccessLevel = ua.AccessLevel.CurrentRead.mask
+    attrs.UserAccessLevel = ua.AccessLevel.CurrentRead.mask
+    addnode.NodeAttributes = attrs
+    results = parent.server.add_nodes([addnode])
+    results[0].StatusCode.check()
+    return node.Node(parent.server, results[0].AddedNodeId)
+
+
+def create_variable(parent, nodeid, bname, variable_type_id, data_type_id, array_length):
+    new_node = _create_variable(parent, nodeid, bname, variable_type_id, data_type_id, array_length)
     new_node.set_modelling_rule(True)
     return new_node
 
 
-def create_ros_property(parent, nodeid, bname, array_length, val, data_type):
-    new_node = parent.add_property(nodeid, bname, val, data_type, data_type)
-    new_node.set_modelling_rule(True)
+def create_property(parent, nodeid, bname, array_length, var, data_type):
+    data_type = ua.NodeId(data_type, 0)
+    new_node = _create_variable(parent, nodeid, bname, None, data_type, array_length, True)
+    new_node.set_value(var)
     return new_node
 
 
-def create_ros_data_type(parent, nodeid, bname, is_abstract=False):
-    new_node = parent.add_data_type(nodeid, bname, is_abstract=is_abstract)
-    return new_node
+def create_data_type(parent, nodeid, bname, is_abstract=False):
+    addnode = ua.AddNodesItem()
+    addnode.RequestedNewNodeId = nodeid
+    addnode.BrowseName = bname
+    addnode.NodeClass = ua.NodeClass.DataType
+    addnode.ParentNodeId = parent.nodeid
+    addnode.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasSubtype)
+    attrs = ua.DataTypeAttributes()
+    attrs.Description = ua.LocalizedText(bname.Name)
+    attrs.DisplayName = ua.LocalizedText(bname.Name)
+    attrs.IsAbstract = is_abstract
+
+    attrs.WriteMask = 0
+    attrs.UserWriteMask = 0
+
+    addnode.NodeAttributes = attrs
+    results = parent.server.add_nodes([addnode])
+    results[0].StatusCode.check()
+    return node.Node(parent.server, results[0].AddedNodeId)
 
 
-def create_ros_variable_type(parent, nodeid, bname, data_type, is_abstract=False):
-    val = ua.Variant(ua.VariantType.Null)
-    new_node = parent.add_variable_type(nodeid, bname, data_type, val, is_abstract)
-    return new_node
+def create_variable_type(parent, nodeid, bname, data_type_id):
+    addnode = ua.AddNodesItem()
+    addnode.RequestedNewNodeId = nodeid
+    addnode.BrowseName = bname
+    addnode.NodeClass = ua.NodeClass.VariableType
+    addnode.ParentNodeId = parent.nodeid
+    addnode.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasSubtype)
+    attrs = ua.VariableTypeAttributes()
+    attrs.Description = ua.LocalizedText(bname.Name)
+    attrs.DisplayName = ua.LocalizedText(bname.Name)
 
+    attrs.DataType = data_type_id
+    attrs.IsAbstract = True
+    _process_ros_array(None, attrs)
+    attrs.WriteMask = 0
+    attrs.UserWriteMask = 0
 
-def create_ros_object_type(parent, nodeid, bname, is_abstract=False):
-    new_node = parent.add_object_type(nodeid, bname, is_abstract)
-    return new_node
+    addnode.NodeAttributes = attrs
+    results = parent.server.add_nodes([addnode])
+    results[0].StatusCode.check()
+    return node.Node(parent.server, results[0].AddedNodeId)
 
 
 def nodeid_generator(idx):

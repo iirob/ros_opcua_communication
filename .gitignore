@@ -2,5 +2,5 @@
 *.pyc
 .idea
 venv
-message.xml
-new_message.xml
+ros_opcua_impl_python_opcua/scripts/message.xml
+ros_opcua_impl_python_opcua/scripts/new_message.xml
