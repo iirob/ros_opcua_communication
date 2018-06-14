@@ -9,14 +9,11 @@ from ros_messages import OpcUaROSMessage
 
 
 class ROSServer(BasicROSServer):
-    def __init__(self):
-        BasicROSServer.__init__(self)
-        self._idx = self._server.register_namespace('http://ros.org/messages')
-
     def _create_messages(self):
         rospy.loginfo(' ----- start creating messages ------ ')
-        OpcUaROSMessage(self._server, self._idx).create_messages()
-        rospy.loginfo(' ----- messages created------ ')
+        message_object = OpcUaROSMessage(self._server, self._idx)
+        message_object.create_messages()
+        rospy.loginfo(' ----- %s messages created------ ' % str(len(message_object.created_variable_types.keys())))
 
     def export_messages(self):
         self._create_messages()
@@ -29,6 +26,7 @@ class ROSServer(BasicROSServer):
 if __name__ == '__main__':
     try:
         with ROSServer() as ua_server:
-            ua_server.export_messages()
+            ua_server._create_messages()
+            rospy.spin()
     except Exception as e:
         print(e.message)

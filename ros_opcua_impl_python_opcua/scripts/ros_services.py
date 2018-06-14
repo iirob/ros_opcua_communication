@@ -9,6 +9,7 @@ from opcua import ua, uamethod
 from opcua.ua.uaerrors import UaError
 
 import ros_global
+from ros_opc_ua import *
 
 
 class OpcUaROSService:
@@ -32,6 +33,8 @@ class OpcUaROSService:
 
     @uamethod
     def _call_service(self, parent, *inputs):
+        if parent.get_node_class() != ua.NodeClass.Object:
+            return None
         rospy.logdebug('Parent of the method is: ' + parent.to_string())
         try:
             rospy.loginfo('Calling Service with name: ' + self._name)
@@ -87,6 +90,48 @@ class OpcUaROSService:
         return parent
 
 
+class OpcUaROSServiceNew:
+
+    def __init__(self, server, idx, created_data_types, created_variable_types):
+        self._server = server
+        self._idx = idx
+
+        self._data_types = created_data_types
+        self._variable_types = created_variable_types
+        self._created_object_types = {}
+
+        object_type_root_path = ['0:Types', '0:ObjectTypes', '0:BaseObjectType']
+        ot_base_node = self._server.get_root_node().get_child(object_type_root_path)
+        self._ot_root = create_ros_variable_type(ot_base_node, nodeid_generator(self._idx),
+                                                 ua.QualifiedName('ROSServiceType', self._idx),
+                                                 ot_base_node.get_data_type())
+
+    @uamethod
+    def _call_service(self, parent, *inputs):
+        if parent.get_node_class() != ua.NodeClass.Object:
+            return None
+        rospy.logdebug('Parent of the method is: ' + parent.to_string())
+        try:
+            rospy.loginfo('Calling Service with name: ' + self._name)
+            # TODO: Refactor here after the get_args function is deleted
+            input_msg = type(self._service_req)(*inputs)
+            rospy.logdebug('Created Input Request for Service %s : %s' % (self._name, str(input_msg)))
+            response = self._proxy(input_msg)
+            rospy.logdebug('got response: ' + str(response))
+            rospy.logdebug('Creating response message object')
+            return_values = []
+            for slot in response.__slots__:
+                rospy.logdebug('Converting slot: ' + str(getattr(response, slot)))
+                return_values.append(getattr(response, slot))
+                rospy.logdebug('Current Response list: ' + str(return_values))
+            if len(return_values) == 0:
+                return None
+            return return_values
+        except (TypeError, rospy.ROSException, rospy.ROSInternalException, rospy.ROSSerializationException,
+                UaError, rosservice.ROSServiceException) as e:
+            rospy.logerr('Error when calling service ' + self._name, e)
+
+
 def get_args(arg_class):
     array = []
     for slot_name, type_name_child in zip(arg_class.__slots__, getattr(arg_class, '_slot_types')):
@@ -129,7 +174,6 @@ def refresh_services(namespace_ros, server, service_dict, idx, services_object_o
 
 
 def remove_inactive_services(server, service_dict):
-    # TODO: the to be deleted methods can be cached in maybe another list, to accelerate the speed of creating services
     # TODO: Reorganize the objects in address space so that the ros_node can be deleted recursively
     ros_services = rosservice.get_service_list()
     delete_targets = []

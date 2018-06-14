@@ -1,5 +1,6 @@
 # GLOBAL VARIABLES AND FUNCTIONS
 import rosgraph
+import roslib
 import rosnode
 import rospy
 import rosmsg
@@ -119,12 +120,48 @@ def correct_type(node, type_message):
         return None
 
 
+def _get_ros_class(class_type, class_name):
+    try:
+        if class_type == 'message':
+            ros_class = roslib.message.get_message_class(class_name)
+        elif class_type == 'service':
+            ros_class = roslib.message.get_service_class(class_name)
+        else:
+            raise rospy.ROSException
+        return ros_class()
+    except rospy.ROSException:
+        rospy.logfatal('Could not create %s, %s class not found!' % (class_name, class_type))
+        return None
+
+
+def get_message_class(message):
+    return _get_ros_class('message', message)
+
+
+def get_service_class(service):
+    return _get_ros_class('service', service)
+
+
+def extract_array_info(type_str):
+    array_size = None
+    if '[' in type_str and type_str[-1] == ']':
+        type_str, array_size_str = type_str.split('[', 1)
+        array_size_str = array_size_str[:-1]
+        if len(array_size_str) > 0:
+            array_size = int(array_size_str)
+        else:
+            array_size = 0
+
+    return type_str, array_size
+
+
 class BasicROSServer:
     def __init__(self):
         self._server = Server()
 
         self._server.set_endpoint('opc.tcp://0.0.0.0:21554/')
         self._server.set_server_name('ROS UA Server')
+        self._idx = self._server.register_namespace('http://ros.org/rosopcua')
 
     def __enter__(self):
         self._server.start()
