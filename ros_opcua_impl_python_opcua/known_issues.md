@@ -72,3 +72,51 @@ ROS services can be retrieved with tools, the structure is similar to ROS messag
 ### Dynamic modelling
 + ROS node
 ROS node can be retrieved from ROS master, which indicates the services and topics. Therefore the services and topics can be organized under ROS nodes, namely ROS node will be initiated in UA server as an object, its services will be provided as methods of the object and its interesting topics will be events or event notifier.
+
+## Method call
+
+Problem: If python opcua supports method call with customized variable types as arguments (The ROS messages we imported).
+
+Related discussion on GitHub [issue 297](https://github.com/FreeOpcUa/python-opcua/issues/297).
+
+The discussion talked about method instantiation, whether a method belongs to an ObjectType or to an object, both are correct according to the discussion. In our case we want to instantiate a method, which maybe is a service or a topic pub/sub.
+After instantiation, the arguments and the linked python methods are not set. we need to use the method in 'server.py' to relink the method.
+
+```python
+...
+    def link_method(self, node, callback):
+        """
+        Link a python function to a UA method in the address space; required when a UA method has been imported
+        to the address space via XML; the python executable must be linked manually
+        Args:
+            node: UA method node
+            callback: python function that the UA method will call
+
+        Returns:
+        """
+        self.iserver.isession.add_method_callback(node.nodeid, callback)
+...
+```
+
+Since the current implementation of the python opcua is like this. My idea for ROS services is, create a big object type, which contains all services that can be listed by:
+
+```bash
+rossrv list
+```
+
+The methods inside this object type can not be called, or print always the meta data of the arguments defined by the ROS services.
+
+When instantiate a ROS node, the services will be created as methods, which as nothing to do with the methods in the object type, and linked to correspondent python method.
+
+This, however, does not solve the problem with the method arguments that contains customized variable types, which is now a problem if I do create methods with customized variables, this will cause a crash of the export xml function and problem of open the GUI of calling method in UAExpert.
+
+## Extension object
+
+also called customized structure
+
+create extension objects on the fly,
+
+use load_type_definitions when using extension objects in client side.
+
+Extension object is defined actually in data type, data type must have encoding, encoding must be an object, this object id will be bind with a UA class, which is called extension object registration, and this encoding node will not be shown in address space. The encoding type must be a member of a DataTypeDictionaryType, the dictionary will be later used for information encoding and decoding.
+

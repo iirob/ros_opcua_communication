@@ -5,35 +5,56 @@ from ros_opc_ua import *
 
 
 class OpcUaROSMessage:
-    def __init__(self, server, idx):
+    def __init__(self, server, idx, idx_name):
         self._server = server
         self._idx = idx
 
         self.created_data_types = {}
         self.created_variable_types = {}
+        self._dict_structs = {}
 
         vt_base_node = self._server.nodes.base_variable_type.get_child('0:BaseDataVariableType')
         self._vt_root = create_variable_type(vt_base_node, nodeid_generator(self._idx),
                                              ua.QualifiedName('ROSMessageType', self._idx),
                                              vt_base_node.get_data_type())
 
-        dt_base_node = self._server.nodes.base_data_type.get_child('0:Structure')
+        dt_base_node = self._server.nodes.base_structure_type
         self._dt_root = create_data_type(dt_base_node, nodeid_generator(self._idx),
                                          ua.QualifiedName('ROSMessage', self._idx), is_abstract=True)
+        self._dict_base = self._server.nodes.opc_binary.add_variable(nodeid_generator(self._idx), 'ROSDictionary',
+                                                                     ua.get_default_value(ua.VariantType.ByteString),
+                                                                     varianttype=ua.VariantType.ByteString)
+        self._dict_base.delete_reference(ua.ObjectIds.BaseDataVariableType, ua.ObjectIds.HasTypeDefinition)
+        self._dict_base.add_reference(ua.ObjectIds.DataTypeDictionaryType, ua.ObjectIds.HasTypeDefinition)
+        self._dict_base.add_property(nodeid_generator(self._idx), 'NameSpaceUri', idx_name)
+        self._dict_base.add_property(nodeid_generator(self._idx), 'Deprecated', True)
+
+        self._type_dictionary = TypeBinaryDictionary(idx_name)
 
     def _is_new_type(self, message):
         return message not in ROS_BUILD_IN_DATA_TYPES.keys() and message not in self.created_data_types.keys()
 
     def _create_data_and_variable_type(self, type_name):
-        new_dt = create_data_type(self._dt_root, nodeid_generator(self._idx),
-                                  ua.QualifiedName(type_name, self._idx))
+        new_dt = self._dt_root.add_data_type(nodeid_generator(self._idx), type_name)
+        # new_dt = create_data_type(self._dt_root, nodeid_generator(self._idx),
+        #                           ua.QualifiedName(type_name, self._idx))
         self.created_data_types[type_name] = new_dt
+        description_node = self._dict_base.add_variable(nodeid_generator(self._idx), type_name,
+                                                        str(type_name), varianttype=ua.VariantType.String)
+        description_node.delete_reference(ua.ObjectIds.BaseDataVariableType, ua.ObjectIds.HasTypeDefinition)
+        description_node.add_reference(ua.ObjectIds.DataTypeDescriptionType, ua.ObjectIds.HasTypeDefinition)
+        encoding_node = new_dt.add_object(nodeid_generator(self._idx), 'Default Binary',
+                                          ua.ObjectIds.DataTypeEncodingType)
+        encoding_node.add_reference(description_node, ua.ObjectIds.HasDescription)
 
         # According to convention, variable type should end with Type
-        vt_name = type_name + 'Type'
-        new_vt = create_variable_type(self._vt_root, nodeid_generator(self._idx),
-                                      ua.QualifiedName(vt_name, self._idx), new_dt.nodeid)
-        self.created_variable_types[vt_name] = new_vt
+        # vt_name = type_name + 'Type'
+        # new_vt = create_variable_type(self._vt_root, nodeid_generator(self._idx),
+        #                               ua.QualifiedName(vt_name, self._idx), new_dt.nodeid)
+        # self.created_variable_types[vt_name] = new_vt
+
+        new_struct = self._type_dictionary.append_struct(type_name)
+        self._dict_structs[type_name] = new_struct
 
     def _recursively_create_message(self, msg):
         # Add current message to data and variable type list
@@ -49,22 +70,26 @@ class OpcUaROSMessage:
                 self._create_data_and_variable_type(base_type_str)
                 self._recursively_create_message(base_type_str)
 
-            current_variable_type = self.created_variable_types[msg + 'Type']
-            if base_type_str in ROS_BUILD_IN_DATA_TYPES.keys():
-                create_property(current_variable_type, nodeid_generator(self._idx),
-                                ua.QualifiedName(variable_type, self._idx), array_size,
-                                *ROS_BUILD_IN_DATA_TYPES[base_type_str])
-            else:
-                create_variable(current_variable_type, nodeid_generator(self._idx),
-                                ua.QualifiedName(variable_type, self._idx),
-                                self.created_variable_types[base_type_str + 'Type'].nodeid,
-                                self.created_data_types[base_type_str].nodeid, array_size)
+            self._type_dictionary.add_field(base_type_str, variable_type, self._dict_structs[msg])
+            # current_variable_type = self.created_variable_types[msg + 'Type']
+            # if base_type_str in ROS_BUILD_IN_DATA_TYPES.keys():
+            #     create_property(current_variable_type, nodeid_generator(self._idx),
+            #                     ua.QualifiedName(variable_type, self._idx), array_size,
+            #                     ua.get_default_value(ROS_BUILD_IN_DATA_TYPES[base_type_str]),
+            #                     ROS_BUILD_IN_DATA_TYPES[base_type_str])
+            # else:
+            #     create_variable(current_variable_type, nodeid_generator(self._idx),
+            #                     ua.QualifiedName(variable_type, self._idx),
+            #                     self.created_variable_types[base_type_str + 'Type'].nodeid,
+            #                     self.created_data_types[base_type_str].nodeid, array_size)
 
     def create_messages(self):
         messages = get_ros_messages()
         for msg in messages:
             if msg not in self.created_data_types.keys():
                 self._recursively_create_message(msg)
+
+        self._dict_base.set_value(self._type_dictionary.get_dict_value(), ua.VariantType.ByteString)
 
 
 def update_node_with_message(node_name, message, idx):

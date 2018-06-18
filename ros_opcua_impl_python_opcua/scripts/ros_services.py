@@ -2,13 +2,12 @@
 # https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_service_caller/src/rqt_service_caller/service_caller_widget.py
 import random
 
-import rospy
 import rosservice
 
-from opcua import ua, uamethod
+from opcua import uamethod
 from opcua.ua.uaerrors import UaError
 
-import ros_global
+from ros_global import *
 from ros_opc_ua import *
 
 
@@ -67,7 +66,7 @@ class OpcUaROSService:
                 if node_with_same_name is not None:
                     rospy.logdebug('recursive call for same name for: ' + name)
                     return self.recursive_create_objects(
-                        ros_global.next_name(hierarchy, hierarchy.index(name)),
+                        next_name(hierarchy, hierarchy.index(name)),
                         idx,
                         node_with_same_name)
                 else:
@@ -75,7 +74,7 @@ class OpcUaROSService:
                         ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                     return self.recursive_create_objects(
-                        ros_global.next_name(hierarchy, hierarchy.index(name)),
+                        next_name(hierarchy, hierarchy.index(name)),
                         idx,
                         new_parent)
             except (IndexError, ua.UaError) as e:
@@ -85,7 +84,7 @@ class OpcUaROSService:
                               ua.NodeIdType.String),
                     ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                 return self.recursive_create_objects(
-                    ros_global.next_name(hierarchy, hierarchy.index(name)), idx,
+                    next_name(hierarchy, hierarchy.index(name)), idx,
                     new_parent)
         return parent
 
@@ -98,38 +97,83 @@ class OpcUaROSServiceNew:
 
         self._data_types = created_data_types
         self._variable_types = created_variable_types
-        self._created_object_types = {}
+        self.created_object_types = {}
 
-        object_type_root_path = ['0:Types', '0:ObjectTypes', '0:BaseObjectType']
-        ot_base_node = self._server.get_root_node().get_child(object_type_root_path)
-        self._ot_root = create_ros_variable_type(ot_base_node, nodeid_generator(self._idx),
-                                                 ua.QualifiedName('ROSServiceType', self._idx),
-                                                 ot_base_node.get_data_type())
+        ot_base_node = self._server.nodes.base_object_type
+        self._ot_root = ot_base_node.add_object_type(nodeid_generator(self._idx),
+                                                     ua.QualifiedName('ROSServiceType', self._idx),
+                                                     is_abstract=True)
 
     @uamethod
     def _call_service(self, parent, *inputs):
-        if parent.get_node_class() != ua.NodeClass.Object:
+        parent_node = self._server.get_node(parent)
+        # Method in a not instantiated node should not be called
+        if parent_node.get_node_class() != ua.NodeClass.Object:
             return None
+        service_name = parent_node.get_properties()[0].get_value()
+        service_type = parent_node.get_references(ua.ObjectIds.HasTypeDefinition)[0]
         rospy.logdebug('Parent of the method is: ' + parent.to_string())
+        result = ua.CallMethodResult()
         try:
-            rospy.loginfo('Calling Service with name: ' + self._name)
-            # TODO: Refactor here after the get_args function is deleted
-            input_msg = type(self._service_req)(*inputs)
-            rospy.logdebug('Created Input Request for Service %s : %s' % (self._name, str(input_msg)))
-            response = self._proxy(input_msg)
-            rospy.logdebug('got response: ' + str(response))
-            rospy.logdebug('Creating response message object')
-            return_values = []
+            rospy.loginfo('Calling Service with name: ' + service_name)
+            service_class = get_service_class(service_type)
+            service_req = getattr(service_class, '_request_class')
+            service_resp = getattr(service_class, '_request_class')
+            input_msg = service_req(*inputs)
+            rospy.logdebug('Created Input Request for Service %s : %s' % (service_name, str(input_msg)))
+            service_proxy = rospy.ServiceProxy(service_name, service_class)
+            response = service_proxy(input_msg)
+            rospy.logdebug('Calling service successful, got response: ' + str(response))
+
+            result.StatusCode = ua.StatusCodes.Good
+
+            # TODO: how to return a UA Object???
             for slot in response.__slots__:
                 rospy.logdebug('Converting slot: ' + str(getattr(response, slot)))
-                return_values.append(getattr(response, slot))
-                rospy.logdebug('Current Response list: ' + str(return_values))
-            if len(return_values) == 0:
-                return None
-            return return_values
+                result.OutputArguments.append(getattr(response, slot))
+
         except (TypeError, rospy.ROSException, rospy.ROSInternalException, rospy.ROSSerializationException,
                 UaError, rosservice.ROSServiceException) as e:
-            rospy.logerr('Error when calling service ' + self._name, e)
+            rospy.logerr('Error when calling service ' + service_name, e)
+            result.StatusCode = ua.StatusCodes.Bad
+        finally:
+            return result
+
+    def _get_args(self, arg_class):
+        args = []
+        for slot_name, type_name in zip(arg_class.__slots__, getattr(arg_class, '_slot_types')):
+            arg = ua.Argument()
+            arg.Name = slot_name
+            arg.Description = ua.LocalizedText(slot_name)
+            base_type_str, array_size = extract_array_info(type_name)
+            process_ros_array(array_size, arg)
+            if base_type_str in ROS_BUILD_IN_DATA_TYPES.keys():
+                arg.DataType = ROS_BUILD_IN_DATA_TYPES[base_type_str]
+            elif base_type_str in self._data_types.keys():
+                arg.DataType = self._data_types[base_type_str].nodeid
+            else:
+                raise rospy.ROSException
+            args.append(arg)
+        return args
+
+    def _create_service(self, service):
+        service_class = get_service_class(service)
+        service_node = self._ot_root.add_object_type(nodeid_generator(self._idx),
+                                                     ua.QualifiedName(service, self._idx))
+        service_node.add_property(nodeid_generator(self._idx),
+                                  ua.QualifiedName('ROS service name', self._idx), '')
+        service_req = getattr(service_class, '_request_class')
+        input_args = self._get_args(service_req)
+        service_resp = getattr(service_class, '_response_class')
+        output_args = self._get_args(service_resp)
+        new_node = service_node.add_method(nodeid_generator(self._idx),
+                                           ua.QualifiedName('ROS service call', self._idx),
+                                           self._call_service, input_args, output_args)
+        self.created_object_types[service] = new_node
+
+    def create_services(self):
+        for srv in get_ros_services():
+            self._create_service(srv)
 
 
 def get_args(arg_class):
@@ -143,14 +187,14 @@ def get_args(arg_class):
             if isinstance(slot, list):
                 arg = ua.Argument()
                 arg.Name = slot_name
-                arg.DataType = ua.NodeId(ros_global.get_object_ids('array'))
+                arg.DataType = ua.NodeId(get_object_ids('array'))
                 arg.ValueRank = 1
                 arg.ArrayDimensions = [1]
                 arg.Description = ua.LocalizedText('Array')
             else:
                 arg = ua.Argument()
                 arg.Name = slot_name
-                arg.DataType = ua.NodeId(ros_global.get_object_ids(type(slot).__name__))
+                arg.DataType = ua.NodeId(get_object_ids(type(slot).__name__))
                 arg.ValueRank = -1
                 arg.ArrayDimensions = []
                 arg.Description = ua.LocalizedText(slot_name)
@@ -187,4 +231,4 @@ def remove_inactive_services(server, service_dict):
             del service_dict[service_nameOPC]
     server.server.delete_nodes(delete_targets, recursive=True)
 
-    ros_global.rosnode_cleanup()
+    rosnode_cleanup()

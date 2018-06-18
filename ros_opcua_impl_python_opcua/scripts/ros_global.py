@@ -161,7 +161,8 @@ class BasicROSServer:
 
         self._server.set_endpoint('opc.tcp://0.0.0.0:21554/')
         self._server.set_server_name('ROS UA Server')
-        self._idx = self._server.register_namespace('http://ros.org/rosopcua')
+        self._idx_name = 'http://ros.org/rosopcua'
+        self._idx = self._server.register_namespace(self._idx_name)
 
     def __enter__(self):
         self._server.start()
