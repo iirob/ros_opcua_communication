@@ -157,20 +157,20 @@ def extract_array_info(type_str):
 
 class BasicROSServer:
     def __init__(self):
-        self._server = Server()
+        self.server = Server()
 
-        self._server.set_endpoint('opc.tcp://0.0.0.0:21554/')
-        self._server.set_server_name('ROS UA Server')
+        self.server.set_endpoint('opc.tcp://0.0.0.0:21554/RosServer')
+        self.server.set_server_name('ROS UA Server')
         self._idx_name = 'http://ros.org/rosopcua'
-        self._idx = self._server.register_namespace(self._idx_name)
+        self._idx = self.server.register_namespace(self._idx_name)
 
     def __enter__(self):
-        self._server.start()
+        self.server.start()
         rospy.init_node('rosopcua', log_level=rospy.INFO)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._server.stop()
+        self.server.stop()
         quit()
 
 

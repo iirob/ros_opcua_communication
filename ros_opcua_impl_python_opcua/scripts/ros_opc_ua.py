@@ -1,7 +1,8 @@
 from opcua import ua
-from opcua.common import node
+from opcua.ua import *
 
 import xml.etree.ElementTree as Et
+import re
 
 ROS_BUILD_IN_DATA_TYPES = {'bool': ua.VariantType.Boolean,
                            'int8': ua.VariantType.SByte,
@@ -36,91 +37,6 @@ def process_ros_array(array_length, attributes):
         attributes.ValueRank = ua.ValueRank.Scalar
 
 
-def _create_variable(parent, nodeid, bname, variable_type_id, data_type_id, array_length, is_property=False):
-    addnode = ua.AddNodesItem()
-    addnode.RequestedNewNodeId = nodeid
-    addnode.BrowseName = bname
-    addnode.NodeClass = ua.NodeClass.Variable
-    addnode.ParentNodeId = parent.nodeid
-    if is_property:
-        addnode.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasProperty)
-        addnode.TypeDefinition = ua.NodeId(ua.ObjectIds.PropertyType)
-    else:
-        addnode.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasComponent)
-        addnode.TypeDefinition = variable_type_id
-    attrs = ua.VariableAttributes()
-    attrs.Description = ua.LocalizedText(bname.Name)
-    attrs.DisplayName = ua.LocalizedText(bname.Name)
-    attrs.DataType = data_type_id
-    process_ros_array(array_length, attrs)
-    attrs.WriteMask = 0
-    attrs.UserWriteMask = 0
-    attrs.Historizing = 0
-    attrs.AccessLevel = ua.AccessLevel.CurrentRead.mask
-    attrs.UserAccessLevel = ua.AccessLevel.CurrentRead.mask
-    addnode.NodeAttributes = attrs
-    results = parent.server.add_nodes([addnode])
-    results[0].StatusCode.check()
-    return node.Node(parent.server, results[0].AddedNodeId)
-
-
-def create_variable(parent, nodeid, bname, variable_type_id, data_type_id, array_length):
-    new_node = _create_variable(parent, nodeid, bname, variable_type_id, data_type_id, array_length)
-    new_node.set_modelling_rule(True)
-    return new_node
-
-
-def create_property(parent, nodeid, bname, array_length, var, data_type):
-    # data_type = ua.NodeId(data_type, 0)
-    new_node = _create_variable(parent, nodeid, bname, None, data_type, array_length, True)
-    new_node.set_value(var)
-    return new_node
-
-
-def create_data_type(parent, nodeid, bname, is_abstract=False):
-    addnode = ua.AddNodesItem()
-    addnode.RequestedNewNodeId = nodeid
-    addnode.BrowseName = bname
-    addnode.NodeClass = ua.NodeClass.DataType
-    addnode.ParentNodeId = parent.nodeid
-    addnode.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasSubtype)
-    attrs = ua.DataTypeAttributes()
-    attrs.Description = ua.LocalizedText(bname.Name)
-    attrs.DisplayName = ua.LocalizedText(bname.Name)
-    attrs.IsAbstract = is_abstract
-
-    attrs.WriteMask = 0
-    attrs.UserWriteMask = 0
-
-    addnode.NodeAttributes = attrs
-    results = parent.server.add_nodes([addnode])
-    results[0].StatusCode.check()
-    return node.Node(parent.server, results[0].AddedNodeId)
-
-
-def create_variable_type(parent, nodeid, bname, data_type_id):
-    addnode = ua.AddNodesItem()
-    addnode.RequestedNewNodeId = nodeid
-    addnode.BrowseName = bname
-    addnode.NodeClass = ua.NodeClass.VariableType
-    addnode.ParentNodeId = parent.nodeid
-    addnode.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasSubtype)
-    attrs = ua.VariableTypeAttributes()
-    attrs.Description = ua.LocalizedText(bname.Name)
-    attrs.DisplayName = ua.LocalizedText(bname.Name)
-
-    attrs.DataType = data_type_id
-    attrs.IsAbstract = True
-    process_ros_array(None, attrs)
-    attrs.WriteMask = 0
-    attrs.UserWriteMask = 0
-
-    addnode.NodeAttributes = attrs
-    results = parent.server.add_nodes([addnode])
-    results[0].StatusCode.check()
-    return node.Node(parent.server, results[0].AddedNodeId)
-
-
 def nodeid_generator(idx):
     return ua.NodeId(namespaceidx=idx)
 
@@ -140,22 +56,25 @@ class TypeBinaryDictionary:
     def append_struct(self, name):
         appended_struct = Et.SubElement(self.etree.getroot(), 'opc:StructuredType')
         appended_struct.attrib["BaseType"] = 'ua:ExtensionObject'
-        appended_struct.attrib["Name"] = name
+        appended_struct.attrib["Name"] = to_camel_case(name)
         return appended_struct
 
     @staticmethod
     def add_field(type_name, variable_name, struct_node):
         if type_name in ROS_BUILD_IN_DATA_TYPES:
-            type_name = 'opc:' + getattr(ROS_BUILD_IN_DATA_TYPES[type_name], '_name_')
+            if type_name == 'string':
+                type_name = 'opc:CharArray'
+            else:
+                type_name = 'opc:' + getattr(ROS_BUILD_IN_DATA_TYPES[type_name], '_name_')
         else:
-            type_name = 'tns:' + type_name
+            type_name = 'tns:' + to_camel_case(type_name)
         field = Et.SubElement(struct_node, 'opc:Field')
-        field.attrib["TypeName"] = type_name
         field.attrib["Name"] = variable_name
+        field.attrib["TypeName"] = type_name
 
     def get_dict_value(self):
         indent(self.etree.getroot())
-        # Et.dump(self.etree.getroot())
+        Et.dump(self.etree.getroot())
         return Et.tostring(self.etree.getroot(), encoding='utf-8')
 
 
@@ -173,3 +92,78 @@ def indent(elem, level=0):
     else:
         if level and (not elem.tail or not elem.tail.strip()):
             elem.tail = i
+
+
+class DictionaryBuilder:
+    def __init__(self, server, idx):
+        self.server = server
+        self.idx = idx
+        self.dict = None
+
+    def add_dictionary(self):
+        node = ua.AddNodesItem()
+        node.RequestedNewNodeId = NumericNodeId(7617, 0)
+        node.BrowseName = QualifiedName('ROSDictionary', 0)
+        node.NodeClass = NodeClass.Variable
+        node.ParentNodeId = NumericNodeId(93, 0)
+        node.ReferenceTypeId = NumericNodeId(47, 0)
+        node.TypeDefinition = NumericNodeId(72, 0)
+        attrs = ua.VariableAttributes()
+        attrs.DisplayName = LocalizedText("Opc.Ua")
+        attrs.DataType = ua.NodeId(ua.ObjectIds.ByteString)
+        attrs.ValueRank = -1
+        node.NodeAttributes = attrs
+        self.server.add_nodes([node])
+
+    def add_dict_description(self):
+        node = ua.AddNodesItem()
+        node.RequestedNewNodeId = NumericNodeId(7692, 0)
+        node.BrowseName = QualifiedName('BuildInfo', 0)
+        node.NodeClass = NodeClass.Variable
+        node.ParentNodeId = NumericNodeId(7617, 0)
+        node.ReferenceTypeId = NumericNodeId(47, 0)
+        node.TypeDefinition = NumericNodeId(69, 0)
+        attrs = ua.VariableAttributes()
+        attrs.DisplayName = LocalizedText("BuildInfo")
+        attrs.DataType = ua.NodeId(ua.ObjectIds.String)
+        attrs.Value = ua.Variant('BuildInfo', ua.VariantType.String)
+        attrs.ValueRank = -1
+        node.NodeAttributes = attrs
+        self.server.add_nodes([node])
+        refs = []
+        ref = ua.AddReferencesItem()
+        ref.IsForward = True
+        ref.ReferenceTypeId = NumericNodeId(40, 0)
+        ref.SourceNodeId = NumericNodeId(7692, 0)
+        ref.TargetNodeClass = NodeClass.DataType
+        ref.TargetNodeId = NumericNodeId(69, 0)
+        refs.append(ref)
+        ref = ua.AddReferencesItem()
+        ref.IsForward = False
+        ref.ReferenceTypeId = NumericNodeId(47, 0)
+        ref.SourceNodeId = NumericNodeId(7692, 0)
+        ref.TargetNodeClass = NodeClass.DataType
+        ref.TargetNodeId = NumericNodeId(7617, 0)
+        refs.append(ref)
+        self.server.add_references(refs)
+
+
+
+def repl_func(m):
+    """
+    process regular expression match groups for word upper-casing problem taken from
+     https://stackoverflow.com/questions/1549641/how-to-capitalize-the-first-letter-of-each-word-in-a-string-python
+     """
+    return m.group(1) + m.group(2).upper()
+
+
+def to_camel_case(name):
+    """
+    Create python class name from ROS message/service strings with package name, class name is in CamelCase
+    e.g.                 actionlib/TestAction -> ActionlibTestAction
+         turtle_actionlib/ShapeActionFeedback -> TurtleActionlibShapeActionFeedback
+    """
+    name = re.sub(r'[^a-zA-Z0-9]+', ' ', name)
+    name = re.sub('(^|\s)(\S)', repl_func, name)
+    name = re.sub(r'[^a-zA-Z0-9]+', '', name)
+    return name
