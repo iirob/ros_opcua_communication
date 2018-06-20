@@ -33,7 +33,7 @@ class OpcUaROSMessage:
         self._dict_xml.add_property(nodeid_generator(self._idx), ua.QualifiedName('NameSpaceUri', self._idx), idx_name)
         self._dict_xml.add_property(nodeid_generator(self._idx), ua.QualifiedName('Deprecated', self._idx), True)
 
-        self._type_dictionary = TypeBinaryDictionary(idx_name)
+        self._type_dictionary = TypeDictionaryBinary(idx_name)
 
     def _is_new_type(self, message):
         return message not in ROS_BUILD_IN_DATA_TYPES and message not in self.created_data_types

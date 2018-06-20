@@ -1,8 +1,9 @@
 from opcua import ua
-from opcua.ua import *
 
 import xml.etree.ElementTree as Et
 import re
+
+IDENTIFIER_COUNTER = 1
 
 ROS_BUILD_IN_DATA_TYPES = {'bool': ua.VariantType.Boolean,
                            'int8': ua.VariantType.SByte,
@@ -38,10 +39,12 @@ def process_ros_array(array_length, attributes):
 
 
 def nodeid_generator(idx):
-    return ua.NodeId(namespaceidx=idx)
+    global IDENTIFIER_COUNTER
+    IDENTIFIER_COUNTER += 1
+    return ua.NodeId(IDENTIFIER_COUNTER, namespaceidx=idx)
 
 
-class TypeBinaryDictionary:
+class TypeDictionaryBinary:
 
     def __init__(self, idx_name):
         head_attributes = {'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance', 'xmlns:tns': idx_name,
@@ -62,10 +65,7 @@ class TypeBinaryDictionary:
     @staticmethod
     def add_field(type_name, variable_name, struct_node):
         if type_name in ROS_BUILD_IN_DATA_TYPES:
-            if type_name == 'string':
-                type_name = 'opc:CharArray'
-            else:
-                type_name = 'opc:' + getattr(ROS_BUILD_IN_DATA_TYPES[type_name], '_name_')
+            type_name = 'opc:' + getattr(ROS_BUILD_IN_DATA_TYPES[type_name], '_name_')
         else:
             type_name = 'tns:' + to_camel_case(type_name)
         field = Et.SubElement(struct_node, 'opc:Field')
@@ -95,58 +95,119 @@ def indent(elem, level=0):
 
 
 class DictionaryBuilder:
-    def __init__(self, server, idx):
-        self.server = server
+    def __init__(self, server, idx, dict_name):
+        self.server = server.get_root_node().server
         self.idx = idx
-        self.dict = None
+        self.dict_id = self._add_dictionary(dict_name)
 
-    def add_dictionary(self):
+    def _add_dictionary(self, name):
+        dictionary_node_id = nodeid_generator(self.idx)
         node = ua.AddNodesItem()
-        node.RequestedNewNodeId = NumericNodeId(7617, 0)
-        node.BrowseName = QualifiedName('ROSDictionary', 0)
-        node.NodeClass = NodeClass.Variable
-        node.ParentNodeId = NumericNodeId(93, 0)
-        node.ReferenceTypeId = NumericNodeId(47, 0)
-        node.TypeDefinition = NumericNodeId(72, 0)
+        node.RequestedNewNodeId = dictionary_node_id
+        node.BrowseName = ua.QualifiedName(name, self.idx)
+        node.NodeClass = ua.NodeClass.Variable
+        node.ParentNodeId = ua.NodeId(ua.ObjectIds.OPCBinarySchema_TypeSystem, 0)
+        node.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasComponent, 0)
+        node.TypeDefinition = ua.NodeId(ua.ObjectIds.DataTypeDictionaryType, 0)
         attrs = ua.VariableAttributes()
-        attrs.DisplayName = LocalizedText("Opc.Ua")
+        attrs.DisplayName = ua.LocalizedText(name)
         attrs.DataType = ua.NodeId(ua.ObjectIds.ByteString)
+        # Value should be set after all data types created
+        attrs.Value = ua.Variant(None, ua.VariantType.Null)
         attrs.ValueRank = -1
         node.NodeAttributes = attrs
         self.server.add_nodes([node])
 
-    def add_dict_description(self):
-        node = ua.AddNodesItem()
-        node.RequestedNewNodeId = NumericNodeId(7692, 0)
-        node.BrowseName = QualifiedName('BuildInfo', 0)
-        node.NodeClass = NodeClass.Variable
-        node.ParentNodeId = NumericNodeId(7617, 0)
-        node.ReferenceTypeId = NumericNodeId(47, 0)
-        node.TypeDefinition = NumericNodeId(69, 0)
-        attrs = ua.VariableAttributes()
-        attrs.DisplayName = LocalizedText("BuildInfo")
-        attrs.DataType = ua.NodeId(ua.ObjectIds.String)
-        attrs.Value = ua.Variant('BuildInfo', ua.VariantType.String)
-        attrs.ValueRank = -1
-        node.NodeAttributes = attrs
-        self.server.add_nodes([node])
-        refs = []
+        return dictionary_node_id
+
+    @staticmethod
+    def _reference_generator(source_id, target_id, reference_type, is_forward=True):
         ref = ua.AddReferencesItem()
-        ref.IsForward = True
-        ref.ReferenceTypeId = NumericNodeId(40, 0)
-        ref.SourceNodeId = NumericNodeId(7692, 0)
-        ref.TargetNodeClass = NodeClass.DataType
-        ref.TargetNodeId = NumericNodeId(69, 0)
-        refs.append(ref)
-        ref = ua.AddReferencesItem()
-        ref.IsForward = False
-        ref.ReferenceTypeId = NumericNodeId(47, 0)
-        ref.SourceNodeId = NumericNodeId(7692, 0)
-        ref.TargetNodeClass = NodeClass.DataType
-        ref.TargetNodeId = NumericNodeId(7617, 0)
-        refs.append(ref)
+        ref.IsForward = is_forward
+        ref.ReferenceTypeId = reference_type
+        ref.SourceNodeId = source_id
+        ref.TargetNodeClass = ua.NodeClass.DataType
+        ref.TargetNodeId = target_id
+        return ref
+
+    def _link_nodes(self, linked_obj_node_id, data_type_node_id, description_node_id):
+        refs = [
+                # add reverse reference to BaseDataType -> Structure
+                self._reference_generator(data_type_node_id, ua.NodeId(ua.ObjectIds.Structure, 0),
+                                          ua.NodeId(ua.ObjectIds.HasSubtype, 0), False),
+                # add reverse reference to created data type
+                self._reference_generator(linked_obj_node_id, data_type_node_id,
+                                          ua.NodeId(ua.ObjectIds.HasEncoding, 0), False),
+                # add HasDescription link to dictionary description
+                self._reference_generator(linked_obj_node_id, description_node_id,
+                                          ua.NodeId(ua.ObjectIds.HasDescription, 0)),
+                # add reverse HasDescription link
+                self._reference_generator(description_node_id, linked_obj_node_id,
+                                          ua.NodeId(ua.ObjectIds.HasDescription, 0), False),
+                # add link to the type definition node
+                self._reference_generator(linked_obj_node_id, ua.NodeId(ua.ObjectIds.DataTypeEncodingType, 0),
+                                          ua.NodeId(ua.ObjectIds.HasTypeDefinition, 0)),
+                # add has type definition link
+                self._reference_generator(description_node_id, ua.NodeId(ua.ObjectIds.DataTypeDescriptionType, 0),
+                                          ua.NodeId(ua.ObjectIds.HasTypeDefinition, 0)),
+                # forward link of dict to description item
+                self._reference_generator(self.dict_id, description_node_id,
+                                          ua.NodeId(ua.ObjectIds.HasComponent, 0)),
+                # add reverse link to dictionary
+                self._reference_generator(description_node_id, self.dict_id,
+                                          ua.NodeId(ua.ObjectIds.HasComponent, 0), False)]
         self.server.add_references(refs)
 
+    def create_data_type(self, name):
+        # apply for new node id
+        data_type_node_id = nodeid_generator(self.idx)
+        description_node_id = nodeid_generator(self.idx)
+        bind_obj_node_id = nodeid_generator(self.idx)
+
+        # create data type node
+        dt_node = ua.AddNodesItem()
+        dt_node.RequestedNewNodeId = data_type_node_id
+        dt_node.BrowseName = ua.QualifiedName(name, self.idx)
+        dt_node.NodeClass = ua.NodeClass.DataType
+        dt_node.ParentNodeId = ua.NodeId(ua.ObjectIds.Structure, 0)
+        dt_node.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasSubtype, 0)
+        dt_attributes = ua.DataTypeAttributes()
+        dt_attributes.DisplayName = ua.LocalizedText(name)
+        dt_node.NodeAttributes = dt_attributes
+
+        # create description node
+        desc_node = ua.AddNodesItem()
+        desc_node.RequestedNewNodeId = description_node_id
+        desc_node.BrowseName = ua.QualifiedName(name, self.idx)
+        desc_node.NodeClass = ua.NodeClass.Variable
+        desc_node.ParentNodeId = self.dict_id
+        desc_node.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasComponent, 0)
+        desc_node.TypeDefinition = ua.NodeId(ua.ObjectIds.DataTypeDescriptionType, 0)
+        desc_attributes = ua.VariableAttributes()
+        desc_attributes.DisplayName = ua.LocalizedText(name)
+        desc_attributes.DataType = ua.NodeId(ua.ObjectIds.String)
+        desc_attributes.Value = ua.Variant(name, ua.VariantType.String)
+        desc_attributes.ValueRank = -1
+        desc_node.NodeAttributes = desc_attributes
+
+        # create object node python class should link to
+        obj_node = ua.AddNodesItem()
+        obj_node.RequestedNewNodeId = bind_obj_node_id
+        obj_node.BrowseName = ua.QualifiedName('Default Binary', 0)
+        obj_node.NodeClass = ua.NodeClass.Object
+        obj_node.ParentNodeId = data_type_node_id
+        obj_node.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasEncoding, 0)
+        obj_node.TypeDefinition = ua.NodeId(ua.ObjectIds.DataTypeEncodingType, 0)
+        obj_attributes = ua.ObjectAttributes()
+        obj_attributes.DisplayName = ua.LocalizedText("Default Binary")
+        obj_attributes.EventNotifier = 0
+        obj_node.NodeAttributes = obj_attributes
+
+        self.server.add_nodes([dt_node, desc_node, obj_node])
+        # link the three node by there node id according to UA standard
+        self._link_nodes(bind_obj_node_id, data_type_node_id, description_node_id)
+
+        return data_type_node_id
 
 
 def repl_func(m):

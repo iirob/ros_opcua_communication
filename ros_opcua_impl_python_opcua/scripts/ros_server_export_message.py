@@ -37,7 +37,21 @@ class ROSServer(BasicROSServer):
 if __name__ == '__main__':
     try:
         with ROSServer() as ua_server:
-            ua_server.create_messages()
+            # ua_server.create_messages()
+            db = DictionaryBuilder(ua_server.server, ua_server._idx, 'ROSDictionary')
+            db.create_data_type('StdMsgsHeader')
+            dict_list = [item for item in ua_server.server.nodes.opc_binary.get_children()
+                         if item.get_browse_name().NamespaceIndex != 0]
+            dict_list[0].set_value(ua.Variant(b"""
+                    <opc:TypeDictionary xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tns="http://ros.org/rosopcua" DefaultByteOrder="LittleEndian" xmlns:opc="http://opcfoundation.org/BinarySchema/" xmlns:ua="http://opcfoundation.org/UA/" TargetNamespace="http://ros.org/rosopcua">
+             <opc:Import Namespace="http://opcfoundation.org/UA/"/>
+             <opc:StructuredType BaseType="ua:ExtensionObject" Name="StdMsgsHeader">
+              <opc:Field TypeName="opc:UInt32" Name="seq"/>
+              <opc:Field TypeName="opc:DateTime" Name="stamp"/>
+              <opc:Field TypeName="opc:String" Name="frame_id"/>
+             </opc:StructuredType>
+            </opc:TypeDictionary>""", ua.VariantType.ByteString))
+            ua_server.server.load_type_definitions()
             structure_folder = ua_server.server.nodes.base_structure_type
             data_type = structure_folder.get_child(ua.QualifiedName(to_camel_case('std_msgs/Header'),
                                                                     ua_server._idx))
@@ -46,16 +60,31 @@ if __name__ == '__main__':
                                                                   data_type.nodeid)
             msg = getattr(ua, to_camel_case('std_msgs/Header'))()
             msg.frame_id = 'test frame id'
-            msg.seq = 9
+            msg.seq = 20
             msg.stamp = datetime.now()
             new_var.set_value(msg)
             result = new_var.get_value()
             # ua_server.create_service()
-            ua_server.export_messages()
+            # ua_server.export_messages()
             rospy.spin()
     except Exception as e:
         print(e.message)
-    # server = ROSServer()
+    # ua_server = ROSServer()
     # server.create_messages()
     # server.create_service()
     # server.export_messages()
+    # db = DictionaryBuilder(ua_server.server, ua_server._idx)
+    # db.create_data_type()
+    # ua_server.server.load_type_definitions()
+    # structure_folder = ua_server.server.nodes.base_structure_type
+    # data_type = structure_folder.get_child(ua.QualifiedName(to_camel_case('std_msgs/Header'),
+    #                                                         ua_server._idx))
+    # new_var = ua_server.server.nodes.objects.add_variable(nodeid_generator(ua_server._idx), 'testHeader',
+    #                                                       ua.Variant(None, ua.VariantType.Null),
+    #                                                       data_type.nodeid)
+    # msg = getattr(ua, to_camel_case('std_msgs/Header'))()
+    # msg.frame_id = 'test frame id'
+    # msg.seq = 9
+    # msg.stamp = datetime.now()
+    # new_var.set_value(msg)
+    # result = new_var.get_value()
