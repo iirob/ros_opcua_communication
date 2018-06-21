@@ -1,4 +1,4 @@
-# GLOBAL VARIABLES AND FUNCTIONS
+# Rewrote some ros functions need in project
 import rosgraph
 import roslib
 import rosnode
@@ -7,6 +7,7 @@ import rosmsg
 from rosmsg import *
 
 from opcua import ua, Server
+from opcua.common.ua_utils import get_nodes_of_namespace
 
 object_id_dict = {'bool': ua.ObjectIds.Boolean,
                   'byte': ua.ObjectIds.Byte,
@@ -28,6 +29,15 @@ object_id_dict = {'bool': ua.ObjectIds.Boolean,
                   'array': ua.ObjectIds.Enumeration,
                   'Time': ua.ObjectIds.Time,
                   'time': ua.ObjectIds.Time}
+
+
+# ros messages  'message' --> nodeVariableType
+messageExportPath = 'message.xml'
+new_messageExportPath = 'new_message.xml'
+messageNode = {}
+
+# ros Topics  'topic_name' --> 'topic_node'
+topicNode = {}
 
 
 def get_object_ids(type_name):
@@ -142,19 +152,6 @@ def get_service_class(service):
     return _get_ros_class('service', service)
 
 
-def extract_array_info(type_str):
-    array_size = None
-    if '[' in type_str and type_str[-1] == ']':
-        type_str, array_size_str = type_str.split('[', 1)
-        array_size_str = array_size_str[:-1]
-        if len(array_size_str) > 0:
-            array_size = int(array_size_str)
-        else:
-            array_size = 0
-
-    return type_str, array_size
-
-
 class BasicROSServer:
     def __init__(self):
         self.server = Server()
@@ -162,7 +159,8 @@ class BasicROSServer:
         self.server.set_endpoint('opc.tcp://0.0.0.0:21554/RosServer')
         self.server.set_server_name('ROS UA Server')
         self._idx_name = 'http://ros.org/rosopcua'
-        self._idx = self.server.register_namespace(self._idx_name)
+        self.idx = self.server.register_namespace(self._idx_name)
+        self.ros_data_types = None
 
     def __enter__(self):
         rospy.init_node('rosopcua', log_level=rospy.INFO)
@@ -175,27 +173,13 @@ class BasicROSServer:
     def start_server(self):
         self.server.start()
 
+    def export_messages(self):
+        rospy.logwarn(' ----- check if Extension Object fully supported! ------ ')
+        rospy.loginfo(' ----- start exporting node message to xml ------ ')
+        node_to_export = get_nodes_of_namespace(self.server, [self.idx])
+        rospy.loginfo(' ----- %s nodes are to be exported ------ ' % len(node_to_export))
+        self.server.export_xml(node_to_export, new_messageExportPath)
+        rospy.loginfo(' ----- node message exported to %s ------ ' % new_messageExportPath)
 
-# created UA nodes in UA Server, only the ROS related nodes
-package_node_created = {}
-# retrieved ROS package names
-packages = []
-
-# ros messages  'message' --> nodeVariableType
-messageExportPath = 'message.xml'
-new_messageExportPath = 'new_message.xml'
-messageNode = {}
-
-# ros_messages 'message' --> nodeDataType
-dataTypeNode = {}
-
-# ros Topics  'topic_name' --> 'topic_node'
-topicNode = {}
-
-# BaseDataType
-# BaseDataVariableType
-
-# baseDataVariableType_node = ;
-
-if __name__ == '__main__':
-    print(get_ros_services())
+    def get_ros_data_type_id(self, name):
+        return self.ros_data_types[name]

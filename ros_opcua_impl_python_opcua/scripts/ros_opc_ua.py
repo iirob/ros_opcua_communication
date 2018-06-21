@@ -3,50 +3,38 @@ from opcua import ua
 import xml.etree.ElementTree as Et
 import re
 
-IDENTIFIER_COUNTER = 1
-
-ROS_BUILD_IN_DATA_TYPES = {'bool': ua.VariantType.Boolean,
-                           'int8': ua.VariantType.SByte,
-                           'byte': ua.VariantType.SByte,  # deprecated int8
-                           'uint8': ua.VariantType.Byte,
-                           'char': ua.VariantType.Byte,  # deprecated uint8
-                           'int16': ua.VariantType.Int16,
-                           'uint16': ua.VariantType.UInt16,
-                           'int32': ua.VariantType.Int32,
-                           'uint32': ua.VariantType.UInt32,
-                           'int64': ua.VariantType.Int64,
-                           'uint64': ua.VariantType.UInt64,
-                           'float32': ua.VariantType.Float,
-                           'float64': ua.VariantType.Float,
-                           'string': ua.VariantType.String,
-                           'time': ua.VariantType.DateTime,
-                           'duration': ua.VariantType.DateTime}
-
-
-def process_ros_array(array_length, attributes):
-    """
-    NOTE: ROS only support 1 dimensional array, therefore the array dimension list has only
-     one member, array_length = 0 indicates a variable length of the arr
-    :param array_length: None represents a scalar, 0 represents an array variable length
-    :param attributes:
-    :return:
-    """
-    if array_length is not None:
-        attributes.ValueRank = ua.ValueRank.OneDimension
-        attributes.ArrayDimensions = [array_length]
-    else:
-        attributes.ValueRank = ua.ValueRank.Scalar
-
 
 def nodeid_generator(idx):
-    global IDENTIFIER_COUNTER
-    IDENTIFIER_COUNTER += 1
-    return ua.NodeId(IDENTIFIER_COUNTER, namespaceidx=idx)
+    return ua.NodeId(namespaceidx=idx)
+
+
+def to_camel_case(name):
+    """
+    Create python class name from ROS message/service strings with package name, class name is in CamelCase
+    e.g.                 actionlib/TestAction -> ActionlibTestAction
+         turtle_actionlib/ShapeActionFeedback -> TurtleActionlibShapeActionFeedback
+    """
+    def repl_func(m):
+        """
+        taken from
+         https://stackoverflow.com/questions/1549641/how-to-capitalize-the-first-letter-of-each-word-in-a-string-python
+         """
+        return m.group(1) + m.group(2).upper()
+
+    name = re.sub(r'[^a-zA-Z0-9]+', ' ', name)
+    name = re.sub('(^|\s)(\S)', repl_func, name)
+    name = re.sub(r'[^a-zA-Z0-9]+', '', name)
+    return name
 
 
 class OPCTypeDictionaryBuilder:
 
-    def __init__(self, idx_name):
+    def __init__(self, idx_name, build_in_dict):
+        """
+        :param idx_name: name of the name space
+        :param build_in_dict: indicates which type should be build in types,
+        types in dict is created as opc:xxx, otherwise as tns:xxx
+        """
         head_attributes = {'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance', 'xmlns:tns': idx_name,
                            'DefaultByteOrder': 'LittleEndian', 'xmlns:opc': 'http://opcfoundation.org/BinarySchema/',
                            'xmlns:ua': 'http://opcfoundation.org/UA/', 'TargetNamespace': idx_name}
@@ -55,43 +43,49 @@ class OPCTypeDictionaryBuilder:
 
         name_space = Et.SubElement(self.etree.getroot(), 'opc:Import')
         name_space.attrib['Namespace'] = 'http://opcfoundation.org/UA/'
-        # Stores different structs for iteration, recursion work
-        self.structs_dict = {}
+
+        self._structs_dict = {}
+        self._build_in_dict = build_in_dict
+
+    def _add_field(self, type_name, variable_name, struct_name):
+        if type_name in self._build_in_dict:
+            type_name = 'opc:' + getattr(self._build_in_dict[type_name], '_name_')
+        else:
+            type_name = 'tns:' + to_camel_case(type_name)
+        field = Et.SubElement(self._structs_dict[struct_name], 'opc:Field')
+        field.attrib['Name'] = variable_name
+        field.attrib['TypeName'] = type_name
+
+    def _add_array_field(self, type_name, variable_name, struct_name):
+        if type_name in self._build_in_dict:
+            type_name = 'opc:' + getattr(self._build_in_dict[type_name], '_name_')
+        else:
+            type_name = 'tns:' + to_camel_case(type_name)
+        array_len = 'NoOf' + variable_name
+        field = Et.SubElement(self._structs_dict[struct_name], 'opc:Field')
+        field.attrib['Name'] = array_len
+        field.attrib['TypeName'] = 'opc:Int32'
+        field = Et.SubElement(self._structs_dict[struct_name], 'opc:Field')
+        field.attrib['Name'] = variable_name
+        field.attrib['TypeName'] = type_name
+        field.attrib['LengthField'] = array_len
+
+    def add_field(self, type_name, variable_name, struct_name, is_array=False):
+        if is_array:
+            self._add_array_field(type_name, variable_name, struct_name)
+        else:
+            self._add_field(type_name, variable_name, struct_name)
 
     def append_struct(self, name):
         appended_struct = Et.SubElement(self.etree.getroot(), 'opc:StructuredType')
         appended_struct.attrib['BaseType'] = 'ua:ExtensionObject'
         appended_struct.attrib['Name'] = to_camel_case(name)
+        self._structs_dict[name] = appended_struct
         return appended_struct
 
-    @staticmethod
-    def add_field(type_name, variable_name, struct_node):
-        if type_name in ROS_BUILD_IN_DATA_TYPES:
-            type_name = 'opc:' + getattr(ROS_BUILD_IN_DATA_TYPES[type_name], '_name_')
-        else:
-            type_name = 'tns:' + to_camel_case(type_name)
-        field = Et.SubElement(struct_node, 'opc:Field')
-        field.attrib['Name'] = variable_name
-        field.attrib['TypeName'] = type_name
-
-    @staticmethod
-    def add_array_field(type_name, variable_name, struct_node):
-        if type_name in ROS_BUILD_IN_DATA_TYPES:
-            type_name = 'opc:' + getattr(ROS_BUILD_IN_DATA_TYPES[type_name], '_name_')
-        else:
-            type_name = 'tns:' + to_camel_case(type_name)
-        array_len = 'NoOf' + variable_name
-        field = Et.SubElement(struct_node, 'opc:Field')
-        field.attrib['Name'] = array_len
-        field.attrib['TypeName'] = 'opc:Int32'
-        field = Et.SubElement(struct_node, 'opc:Field')
-        field.attrib['Name'] = variable_name
-        field.attrib['TypeName'] = type_name
-        field.attrib['LengthField'] = array_len
-
     def get_dict_value(self):
-        # For debugging
         self.indent(self.etree.getroot())
+        # For debugging
         # Et.dump(self.etree.getroot())
         return Et.tostring(self.etree.getroot(), encoding='utf-8')
 
@@ -116,10 +110,15 @@ class DataTypeDictionaryBuilder:
         self._server = server
         self._session_server = server.get_root_node().server
         self._idx = idx
+        self._id_counter = 8000
         self.dict_id = self._add_dictionary(dict_name)
 
+    def nodeid_generator(self):
+        self._id_counter += 1
+        return ua.NodeId(self._id_counter, namespaceidx=self._idx, nodeidtype=ua.NodeIdType.Numeric)
+
     def _add_dictionary(self, name):
-        dictionary_node_id = nodeid_generator(self._idx)
+        dictionary_node_id = self.nodeid_generator()
         node = ua.AddNodesItem()
         node.RequestedNewNodeId = dictionary_node_id
         node.BrowseName = ua.QualifiedName(name, self._idx)
@@ -179,9 +178,9 @@ class DataTypeDictionaryBuilder:
 
     def create_data_type(self, name):
         # apply for new node id
-        data_type_node_id = nodeid_generator(self._idx)
-        description_node_id = nodeid_generator(self._idx)
-        bind_obj_node_id = nodeid_generator(self._idx)
+        data_type_node_id = self.nodeid_generator()
+        description_node_id = self.nodeid_generator()
+        bind_obj_node_id = self.nodeid_generator()
 
         # create data type node
         dt_node = ua.AddNodesItem()
@@ -230,23 +229,3 @@ class DataTypeDictionaryBuilder:
     def set_dict_byte_string(self, value):
         dict_node = self._server.get_node(self.dict_id)
         dict_node.set_value(value, ua.VariantType.ByteString)
-
-
-def repl_func(m):
-    """
-    process regular expression match groups for word upper-casing problem taken from
-     https://stackoverflow.com/questions/1549641/how-to-capitalize-the-first-letter-of-each-word-in-a-string-python
-     """
-    return m.group(1) + m.group(2).upper()
-
-
-def to_camel_case(name):
-    """
-    Create python class name from ROS message/service strings with package name, class name is in CamelCase
-    e.g.                 actionlib/TestAction -> ActionlibTestAction
-         turtle_actionlib/ShapeActionFeedback -> TurtleActionlibShapeActionFeedback
-    """
-    name = re.sub(r'[^a-zA-Z0-9]+', ' ', name)
-    name = re.sub('(^|\s)(\S)', repl_func, name)
-    name = re.sub(r'[^a-zA-Z0-9]+', '', name)
-    return name
