@@ -165,13 +165,15 @@ class BasicROSServer:
         self._idx = self.server.register_namespace(self._idx_name)
 
     def __enter__(self):
-        self.server.start()
         rospy.init_node('rosopcua', log_level=rospy.INFO)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.server.stop()
         quit()
+
+    def start_server(self):
+        self.server.start()
 
 
 # created UA nodes in UA Server, only the ROS related nodes

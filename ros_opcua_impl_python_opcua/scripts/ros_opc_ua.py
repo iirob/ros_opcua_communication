@@ -44,7 +44,7 @@ def nodeid_generator(idx):
     return ua.NodeId(IDENTIFIER_COUNTER, namespaceidx=idx)
 
 
-class TypeDictionaryBinary:
+class OPCTypeDictionaryBuilder:
 
     def __init__(self, idx_name):
         head_attributes = {'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance', 'xmlns:tns': idx_name,
@@ -55,11 +55,13 @@ class TypeDictionaryBinary:
 
         name_space = Et.SubElement(self.etree.getroot(), 'opc:Import')
         name_space.attrib['Namespace'] = 'http://opcfoundation.org/UA/'
+        # Stores different structs for iteration, recursion work
+        self.structs_dict = {}
 
     def append_struct(self, name):
         appended_struct = Et.SubElement(self.etree.getroot(), 'opc:StructuredType')
-        appended_struct.attrib["BaseType"] = 'ua:ExtensionObject'
-        appended_struct.attrib["Name"] = to_camel_case(name)
+        appended_struct.attrib['BaseType'] = 'ua:ExtensionObject'
+        appended_struct.attrib['Name'] = to_camel_case(name)
         return appended_struct
 
     @staticmethod
@@ -69,42 +71,58 @@ class TypeDictionaryBinary:
         else:
             type_name = 'tns:' + to_camel_case(type_name)
         field = Et.SubElement(struct_node, 'opc:Field')
-        field.attrib["Name"] = variable_name
-        field.attrib["TypeName"] = type_name
+        field.attrib['Name'] = variable_name
+        field.attrib['TypeName'] = type_name
+
+    @staticmethod
+    def add_array_field(type_name, variable_name, struct_node):
+        if type_name in ROS_BUILD_IN_DATA_TYPES:
+            type_name = 'opc:' + getattr(ROS_BUILD_IN_DATA_TYPES[type_name], '_name_')
+        else:
+            type_name = 'tns:' + to_camel_case(type_name)
+        array_len = 'NoOf' + variable_name
+        field = Et.SubElement(struct_node, 'opc:Field')
+        field.attrib['Name'] = array_len
+        field.attrib['TypeName'] = 'opc:Int32'
+        field = Et.SubElement(struct_node, 'opc:Field')
+        field.attrib['Name'] = variable_name
+        field.attrib['TypeName'] = type_name
+        field.attrib['LengthField'] = array_len
 
     def get_dict_value(self):
-        indent(self.etree.getroot())
-        Et.dump(self.etree.getroot())
+        # For debugging
+        self.indent(self.etree.getroot())
+        # Et.dump(self.etree.getroot())
         return Et.tostring(self.etree.getroot(), encoding='utf-8')
 
+    def indent(self, elem, level=0):
+        i = '\n' + level * '  '
+        if len(elem):
+            if not elem.text or not elem.text.strip():
+                elem.text = i + '  '
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+            for elem in elem:
+                self.indent(elem, level + 1)
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+        else:
+            if level and (not elem.tail or not elem.tail.strip()):
+                elem.tail = i
 
-def indent(elem, level=0):
-    i = "\n" + level * "  "
-    if len(elem):
-        if not elem.text or not elem.text.strip():
-            elem.text = i + "  "
-        if not elem.tail or not elem.tail.strip():
-            elem.tail = i
-        for elem in elem:
-            indent(elem, level + 1)
-        if not elem.tail or not elem.tail.strip():
-            elem.tail = i
-    else:
-        if level and (not elem.tail or not elem.tail.strip()):
-            elem.tail = i
 
-
-class DictionaryBuilder:
+class DataTypeDictionaryBuilder:
     def __init__(self, server, idx, dict_name):
-        self.server = server.get_root_node().server
-        self.idx = idx
+        self._server = server
+        self._session_server = server.get_root_node().server
+        self._idx = idx
         self.dict_id = self._add_dictionary(dict_name)
 
     def _add_dictionary(self, name):
-        dictionary_node_id = nodeid_generator(self.idx)
+        dictionary_node_id = nodeid_generator(self._idx)
         node = ua.AddNodesItem()
         node.RequestedNewNodeId = dictionary_node_id
-        node.BrowseName = ua.QualifiedName(name, self.idx)
+        node.BrowseName = ua.QualifiedName(name, self._idx)
         node.NodeClass = ua.NodeClass.Variable
         node.ParentNodeId = ua.NodeId(ua.ObjectIds.OPCBinarySchema_TypeSystem, 0)
         node.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasComponent, 0)
@@ -112,11 +130,11 @@ class DictionaryBuilder:
         attrs = ua.VariableAttributes()
         attrs.DisplayName = ua.LocalizedText(name)
         attrs.DataType = ua.NodeId(ua.ObjectIds.ByteString)
-        # Value should be set after all data types created
+        # Value should be set after all data types created by calling set_dict_byte_string
         attrs.Value = ua.Variant(None, ua.VariantType.Null)
         attrs.ValueRank = -1
         node.NodeAttributes = attrs
-        self.server.add_nodes([node])
+        self._session_server.add_nodes([node])
 
         return dictionary_node_id
 
@@ -131,6 +149,7 @@ class DictionaryBuilder:
         return ref
 
     def _link_nodes(self, linked_obj_node_id, data_type_node_id, description_node_id):
+        """link the three node by their node ids according to UA standard"""
         refs = [
                 # add reverse reference to BaseDataType -> Structure
                 self._reference_generator(data_type_node_id, ua.NodeId(ua.ObjectIds.Structure, 0),
@@ -156,18 +175,18 @@ class DictionaryBuilder:
                 # add reverse link to dictionary
                 self._reference_generator(description_node_id, self.dict_id,
                                           ua.NodeId(ua.ObjectIds.HasComponent, 0), False)]
-        self.server.add_references(refs)
+        self._session_server.add_references(refs)
 
     def create_data_type(self, name):
         # apply for new node id
-        data_type_node_id = nodeid_generator(self.idx)
-        description_node_id = nodeid_generator(self.idx)
-        bind_obj_node_id = nodeid_generator(self.idx)
+        data_type_node_id = nodeid_generator(self._idx)
+        description_node_id = nodeid_generator(self._idx)
+        bind_obj_node_id = nodeid_generator(self._idx)
 
         # create data type node
         dt_node = ua.AddNodesItem()
         dt_node.RequestedNewNodeId = data_type_node_id
-        dt_node.BrowseName = ua.QualifiedName(name, self.idx)
+        dt_node.BrowseName = ua.QualifiedName(name, self._idx)
         dt_node.NodeClass = ua.NodeClass.DataType
         dt_node.ParentNodeId = ua.NodeId(ua.ObjectIds.Structure, 0)
         dt_node.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasSubtype, 0)
@@ -178,7 +197,7 @@ class DictionaryBuilder:
         # create description node
         desc_node = ua.AddNodesItem()
         desc_node.RequestedNewNodeId = description_node_id
-        desc_node.BrowseName = ua.QualifiedName(name, self.idx)
+        desc_node.BrowseName = ua.QualifiedName(name, self._idx)
         desc_node.NodeClass = ua.NodeClass.Variable
         desc_node.ParentNodeId = self.dict_id
         desc_node.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasComponent, 0)
@@ -199,15 +218,18 @@ class DictionaryBuilder:
         obj_node.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasEncoding, 0)
         obj_node.TypeDefinition = ua.NodeId(ua.ObjectIds.DataTypeEncodingType, 0)
         obj_attributes = ua.ObjectAttributes()
-        obj_attributes.DisplayName = ua.LocalizedText("Default Binary")
+        obj_attributes.DisplayName = ua.LocalizedText('Default Binary')
         obj_attributes.EventNotifier = 0
         obj_node.NodeAttributes = obj_attributes
 
-        self.server.add_nodes([dt_node, desc_node, obj_node])
-        # link the three node by there node id according to UA standard
+        self._session_server.add_nodes([dt_node, desc_node, obj_node])
         self._link_nodes(bind_obj_node_id, data_type_node_id, description_node_id)
 
         return data_type_node_id
+
+    def set_dict_byte_string(self, value):
+        dict_node = self._server.get_node(self.dict_id)
+        dict_node.set_value(value, ua.VariantType.ByteString)
 
 
 def repl_func(m):

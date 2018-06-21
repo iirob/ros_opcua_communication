@@ -10,104 +10,74 @@ class OpcUaROSMessage:
         self._idx = idx
 
         self.created_data_types = {}
-        self._dict_structs = {}
 
-        self._dt_root = self._server.nodes.base_structure_type
-        self._dt_root.set_attribute(ua.AttributeIds.IsAbstract, ua.DataValue(True))
-        self._dict_bin = self._server.nodes.opc_binary.add_variable(nodeid_generator(self._idx),
-                                                                    ua.QualifiedName('ROSDictionary', self._idx),
-                                                                    ua.get_default_value(ua.VariantType.ByteString),
-                                                                    varianttype=ua.VariantType.ByteString)
-        self._dict_bin.delete_reference(ua.ObjectIds.BaseDataVariableType, ua.ObjectIds.HasTypeDefinition)
-        self._dict_bin.add_reference(ua.ObjectIds.DataTypeDictionaryType, ua.ObjectIds.HasTypeDefinition)
-        self._dict_bin.add_property(nodeid_generator(self._idx), ua.QualifiedName('NameSpaceUri', self._idx), idx_name)
-        self._dict_bin.add_property(nodeid_generator(self._idx), ua.QualifiedName('Deprecated', self._idx), True)
-
-        _dict_xml = self._server.get_node(ua.NodeId(ua.ObjectIds.XmlSchema_TypeSystem))
-        self._dict_xml = _dict_xml.add_variable(nodeid_generator(self._idx),
-                                                ua.QualifiedName('ROSDictionary', self._idx),
-                                                ua.get_default_value(ua.VariantType.ByteString),
-                                                varianttype=ua.VariantType.ByteString)
-        self._dict_xml.delete_reference(ua.ObjectIds.BaseDataVariableType, ua.ObjectIds.HasTypeDefinition)
-        self._dict_xml.add_reference(ua.ObjectIds.DataTypeDictionaryType, ua.ObjectIds.HasTypeDefinition)
-        self._dict_xml.add_property(nodeid_generator(self._idx), ua.QualifiedName('NameSpaceUri', self._idx), idx_name)
-        self._dict_xml.add_property(nodeid_generator(self._idx), ua.QualifiedName('Deprecated', self._idx), True)
-
-        self._type_dictionary = TypeDictionaryBinary(idx_name)
+        self._dict_builder = DataTypeDictionaryBuilder(server, idx, 'ROSDictionary')
+        self._type_dictionary = OPCTypeDictionaryBuilder(idx_name)
 
     def _is_new_type(self, message):
         return message not in ROS_BUILD_IN_DATA_TYPES and message not in self.created_data_types
 
     def _create_data_type(self, type_name):
-        new_dt = self._dt_root.add_data_type(nodeid_generator(self._idx),
-                                             ua.QualifiedName(to_camel_case(type_name), self._idx))
-        self.created_data_types[type_name] = new_dt
-
-        bin_node = self._dict_bin.add_variable(nodeid_generator(self._idx),
-                                               ua.QualifiedName(to_camel_case(type_name), self._idx),
-                                               str(to_camel_case(type_name)))
-        bin_node.delete_reference(ua.ObjectIds.BaseDataVariableType, ua.ObjectIds.HasTypeDefinition)
-        bin_node.add_reference(ua.ObjectIds.DataTypeDescriptionType, ua.ObjectIds.HasTypeDefinition)
-        bin_encoding = new_dt.add_object(nodeid_generator(self._idx), 'Default Binary',
-                                         ua.ObjectIds.DataTypeEncodingType)
-        # bin_encoding.set_attribute(ua.AttributeIds.BrowseName, ua.DataValue(ua.Variant('Default Binary')))
-        bin_encoding.add_reference(bin_node, ua.ObjectIds.HasDescription)
-
-        xml_node = self._dict_xml.add_variable(nodeid_generator(self._idx),
-                                               ua.QualifiedName(to_camel_case(type_name), self._idx),
-                                               "//xs:element[@name='%s']" % str(to_camel_case(type_name)))
-        xml_node.delete_reference(ua.ObjectIds.BaseDataVariableType, ua.ObjectIds.HasTypeDefinition)
-        xml_node.add_reference(ua.ObjectIds.DataTypeDescriptionType, ua.ObjectIds.HasTypeDefinition)
-        xml_encoding = new_dt.add_object(nodeid_generator(self._idx), 'Default XML',
-                                         ua.ObjectIds.DataTypeEncodingType)
-        # bin_encoding.set_attribute(ua.AttributeIds.BrowseName, ua.DataValue(ua.Variant('Default XML')))
-        xml_encoding.add_reference(xml_node, ua.ObjectIds.HasDescription)
-
-        new_dt.delete_reference(bin_encoding.nodeid, ua.ObjectIds.HasComponent)
-        new_dt.delete_reference(xml_encoding.nodeid, ua.ObjectIds.HasComponent)
-        new_dt.add_reference(bin_encoding.nodeid, ua.ObjectIds.HasEncoding)
-        new_dt.add_reference(xml_encoding.nodeid, ua.ObjectIds.HasEncoding)
+        new_dt_id = self._dict_builder.create_data_type(to_camel_case(type_name))
+        self.created_data_types[type_name] = new_dt_id
 
         new_struct = self._type_dictionary.append_struct(type_name)
-        self._dict_structs[type_name] = new_struct
+        self._type_dictionary.structs_dict[type_name] = new_struct
 
     def _recursively_create_message(self, msg):
-        # Add current message to data and variable type list
         if self._is_new_type(msg):
             self._create_data_type(msg)
-        # handle subtypes
         message = get_message_class(msg)
+        # Broken packages
         if not message:
             return
-
         for variable_type, data_type in zip(message.__slots__, getattr(message, '_slot_types')):
             base_type_str, array_size = extract_array_info(data_type)
-            # TODO: add function to handle with array_size
             if self._is_new_type(base_type_str):
                 self._create_data_type(base_type_str)
                 self._recursively_create_message(base_type_str)
+            # ROS only support 1 dimensional array
+            if array_size is None:
+                self._type_dictionary.add_field(base_type_str, variable_type, self._type_dictionary.structs_dict[msg])
+            else:
+                self._type_dictionary.add_array_field(base_type_str, variable_type,
+                                                      self._type_dictionary.structs_dict[msg])
 
-            self._type_dictionary.add_field(base_type_str, variable_type, self._dict_structs[msg])
+    def _process_service_classes(self, srv):
+        msg_name = getattr(srv, '_type')
+        self._create_data_type(msg_name)
+        for variable_type, data_type in zip(srv.__slots__, getattr(srv, '_slot_types')):
+            base_type_str, array_size = extract_array_info(data_type)
+            if array_size is None:
+                self._type_dictionary.add_field(base_type_str, variable_type,
+                                                self._type_dictionary.structs_dict[msg_name])
+            else:
+                self._type_dictionary.add_array_field(base_type_str, variable_type,
+                                                      self._type_dictionary.structs_dict[msg_name])
+
+    def _create_services(self):
+        """since srv can not embed another .srv, i.e. no recursion needed"""
+        services = get_ros_services()
+        for srv in services:
+            service = get_service_class(srv)
+            # Broken packages
+            if not service:
+                return
+            request = getattr(service, '_request_class')
+            self._process_service_classes(request)
+            response = getattr(service, '_response_class')
+            self._process_service_classes(response)
 
     def create_messages(self):
-        # messages = get_ros_messages()
-        messages = ['std_msgs/Header']
+        messages = get_ros_messages()
         for msg in messages:
-            if msg not in self.created_data_types.keys():
+            if msg not in self.created_data_types:
                 self._recursively_create_message(msg)
 
-        magic_string = """
-        <opc:TypeDictionary xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tns="http://ros.org/rosopcua" DefaultByteOrder="LittleEndian" xmlns:opc="http://opcfoundation.org/BinarySchema/" xmlns:ua="http://opcfoundation.org/UA/" TargetNamespace="http://ros.org/rosopcua">
- <opc:Import Namespace="http://opcfoundation.org/UA/"/>
- <opc:StructuredType BaseType="ua:ExtensionObject" Name="StdMsgsHeader">
-  <opc:Field TypeName="opc:UInt32" Name="seq"/>
-  <opc:Field TypeName="opc:DateTime" Name="stamp"/>
-  <opc:Field TypeName="opc:CharArray" Name="frame_id"/>
- </opc:StructuredType>
-</opc:TypeDictionary>"""
-        self._dict_bin.set_value(magic_string, ua.VariantType.ByteString)
-        # self._dict_bin.set_value(self._type_dictionary.get_dict_value(), ua.VariantType.ByteString)
-        self._dict_xml.set_value(self._type_dictionary.get_dict_value(), ua.VariantType.ByteString)
+        self._create_services()
+
+        ros_opc_model = self._type_dictionary.get_dict_value()
+        self._dict_builder.set_dict_byte_string(ros_opc_model)
 
 
 def update_node_with_message(node_name, message, idx):
