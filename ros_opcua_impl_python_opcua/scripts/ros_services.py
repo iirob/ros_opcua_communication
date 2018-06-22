@@ -4,7 +4,6 @@
 import rosservice
 
 from opcua import uamethod
-from opcua.ua.uaerrors import UaError
 
 from ros_global import *
 from ros_opc_ua import to_camel_case
@@ -12,30 +11,34 @@ from ros_opc_ua import to_camel_case
 
 class OpcUaROSService:
 
-    def __init__(self, service_name, node_root, service_node_id, in_dt_node_id, out_dt_node_id):
+    def __init__(self, service_name, node_root, service_node_id, msg_dict):
         self._service_class = rosservice.get_service_class_by_name(service_name)
         self._service_name = service_name
         self.proxy = rospy.ServiceProxy(service_name, self._service_class)
         self._node_root = node_root
 
-        # Build the Array of inputs
         self._ros_service_req = getattr(self._service_class, '_request_class')
         self._ros_service_resp = getattr(self._service_class, '_response_class')
-        input_arg = self._create_args(getattr(self._ros_service_req, '_type'), in_dt_node_id)
-        output_arg = self._create_args(getattr(self._ros_service_resp, '_type'), out_dt_node_id)
+        in_dt_node_id = msg_dict[getattr(self._ros_service_req, '_type')]
+        out_dt_node_id = msg_dict[getattr(self._ros_service_resp, '_type')]
+        input_arg = self._create_args(self._ros_service_req, in_dt_node_id)
+        output_arg = self._create_args(self._ros_service_resp, out_dt_node_id)
 
         node_root.add_method(service_node_id, service_name, self._call_service, input_arg, output_arg)
         rospy.loginfo('Created ROS Service with name: ' + service_name)
 
     @staticmethod
-    def _create_args(arg_name, data_type):
+    def _create_args(msg_class, data_type):
         """one extension object contains all info"""
+        if not len(getattr(msg_class, '__slots__')):
+            return []
+        msg_class_name = getattr(msg_class, '_type')
         arg = ua.Argument()
-        arg.Name = arg_name
+        arg.Name = msg_class_name
         arg.DataType = data_type
         arg.ValueRank = -1
         arg.ArrayDimensions = []
-        arg.Description = ua.LocalizedText(arg_name)
+        arg.Description = ua.LocalizedText(msg_class_name)
         return [arg]
 
     @staticmethod
@@ -45,31 +48,22 @@ class OpcUaROSService:
     @uamethod
     def _call_service(self, parent, *inputs):
         rospy.loginfo('Calling service %s under ROS node %s' % (self._service_name, parent.to_string()))
-        # result = ua.CallMethodResult()
         try:
-            response = self.proxy(self.ua_class_to_ros_msg(inputs[0]))
-            # result.StatusCode = ua.StatusCodes.Good
-            # result.InputArgumentResults.append(result.StatusCode)
-            # result.OutputArguments.append(ua.Variant(self.ros_msg_to_ua_class(response),
-            #                                          ua.VariantType.ExtensionObject))
-            return ua.Variant(self.ros_msg_to_ua_class(response))
-        except (TypeError, rospy.ROSException, rospy.ROSInternalException, rospy.ROSSerializationException,
-                UaError, rosservice.ROSServiceException) as e:
+            response = self.proxy(self._to_ros_msg(inputs[0]))
+            rospy.loginfo('Calling service succeeded')
+            return ua.Variant(self._to_ua_class(response))
+        except Exception as e:
             rospy.logerr('Error when calling service ' + self._service_name, e)
-            # result.StatusCode = ua.StatusCodes.Bad
-            # result.InputArgumentResults.append(result.StatusCode)
-        # finally:
-        #     return result
 
     # TODO: create deep copy between nested messages and ua classes
-    def ua_class_to_ros_msg(self, ua_class):
+    def _to_ros_msg(self, ua_class):
         ros_msg = self._ros_service_req()
         for attr in ua_class.ua_types:
             setattr(ros_msg, attr[0], getattr(ua_class, attr[0]))
         return ros_msg
 
-    def ros_msg_to_ua_class(self, ros_msg):
-        # To deal with bugs in calling methods with empty extension objects
+    def _to_ua_class(self, ros_msg):
+        # BUG: To deal with bug (BadEndOfStream) in calling methods with empty extension objects
         if not len(ros_msg.__slots__):
             return None
         ua_class_name = getattr(self._ros_service_resp, '_type')

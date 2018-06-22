@@ -90,6 +90,24 @@ def get_ros_package(package_name):
     return list_types(package_name, mode=MODE_MSG)
 
 
+def get_nodes_info(node_name):
+    master = rosgraph.Master(node_name)
+    state = master.getSystemState()
+
+    nodes = []
+    for s in state:
+        for t, l in s:
+            nodes.extend(l)
+    nodes = list(set(nodes))
+    nodes_info_dict = {}
+    for node in nodes:
+        node_info = {'pubs': sorted([t for t, l in state[0] if node in l]),
+                     'subs': sorted([t for t, l in state[1] if node in l]),
+                     'srvs': sorted([t for t, l in state[2] if node in l])}
+        nodes_info_dict[node] = node_info
+    return nodes_info_dict
+
+
 def next_name(hierarchy, index_of_last_processed):
     """
     Returns the hierarchy as one string from the first remaining part on.
@@ -160,10 +178,11 @@ class BasicROSServer:
         self.server.set_server_name('ROS UA Server')
         self._idx_name = 'http://ros.org/rosopcua'
         self.idx = self.server.register_namespace(self._idx_name)
-        self.ros_data_types = None
+        self.ros_node_name = 'rosopcua'
+        self.ros_msgs = None
 
     def __enter__(self):
-        rospy.init_node('rosopcua', log_level=rospy.INFO)
+        rospy.init_node(self.ros_node_name, log_level=rospy.INFO)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -182,4 +201,4 @@ class BasicROSServer:
         rospy.loginfo(' ----- node message exported to %s ------ ' % new_messageExportPath)
 
     def get_ros_data_type_id(self, name):
-        return self.ros_data_types[name]
+        return self.ros_msgs[name]
