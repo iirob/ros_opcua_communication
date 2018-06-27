@@ -160,6 +160,9 @@ def _get_ros_class(class_type, class_name):
     except rospy.ROSException:
         rospy.logfatal('Could not create %s, %s class not found!' % (class_name, class_type))
         return None
+    except TypeError:
+        rospy.logfatal('Could not create %s, %s class not found!' % (class_name, class_type))
+        return None
 
 
 def get_message_class(message):

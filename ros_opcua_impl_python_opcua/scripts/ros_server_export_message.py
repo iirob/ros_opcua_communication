@@ -36,6 +36,18 @@ if __name__ == '__main__':
         with ROSServer() as ua_server:
             ua_server.load_messages()
             ua_server.create_nodes()
+            # test_message = 'std_msgs/Header'
+            # test_dt = ua_server.get_ros_data_type_id(test_message)
+            # new_var = ua_server.server.nodes.objects.add_variable(nodeid_generator(ua_server.idx), 'testHeader',
+            #                                                       ua.Variant(None, ua.VariantType.Null),
+            #                                                       datatype=test_dt)
+            # new_var.set_writable()
+            # msg = ua_server.get_ros_class(test_message)()
+            # msg.frame_id = 'test frame id'
+            # msg.seq = 20
+            # new_var.set_value(msg)
+            # result = new_var.get_value()
+
             ua_server.start_server()
             rospy.spin()
     except Exception as e:
