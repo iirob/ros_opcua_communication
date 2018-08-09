@@ -12,9 +12,25 @@ import rostopic
 from opcua import ua, uamethod
 from opcua.ua.uaerrors import UaError
 
+from ros_opc_ua import ros_msg_to_ua_class
+
 import ros_actions
 import ros_global
 import ros_messages
+
+
+class OpcUaROSTopicPub:
+
+    def __init__(self, topic_name, node_root, pub_node_id, msg_dict):
+        self._topic_class, _, _ = rostopic.get_topic_class(topic_name)
+        self._msg_name = getattr(self._topic_class, '_type')
+        self._pub = node_root.add_variable(pub_node_id, topic_name, ua.Variant(None, ua.VariantType.Null),
+                                           datatype=msg_dict[self._msg_name])
+        rospy.loginfo('Created UA variable for ROS Publication under topic: ' + topic_name)
+        rospy.Subscriber(topic_name, self._topic_class, self._message_callback)
+
+    def _message_callback(self, message):
+        self._pub.set_value(ros_msg_to_ua_class(message, self._msg_name))
 
 
 class OpcUaROSTopic:

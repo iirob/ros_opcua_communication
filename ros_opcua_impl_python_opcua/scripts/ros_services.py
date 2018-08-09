@@ -6,7 +6,7 @@ import rosservice
 from opcua import uamethod
 
 from ros_global import *
-from ros_opc_ua import to_camel_case
+from ros_opc_ua import ua_class_to_ros_msg, ros_msg_to_ua_class
 
 
 class OpcUaROSService:
@@ -41,36 +41,15 @@ class OpcUaROSService:
         arg.Description = ua.LocalizedText(msg_class_name)
         return [arg]
 
-    @staticmethod
-    def get_ua_class(ua_class_name):
-        return getattr(ua, to_camel_case(ua_class_name))
-
     @uamethod
     def _call_service(self, parent, *inputs):
         rospy.loginfo('Calling service %s under ROS node %s' % (self._service_name, parent.to_string()))
         try:
-            response = self.proxy(self._to_ros_msg(inputs[0]))
+            response = self.proxy(ua_class_to_ros_msg(inputs[0], self._ros_service_req))
             rospy.loginfo('Calling service succeeded')
-            return ua.Variant(self._to_ua_class(response))
+            return ua.Variant(ros_msg_to_ua_class(response, getattr(self._ros_service_resp, '_type')))
         except Exception as e:
             rospy.logerr('Error when calling service ' + self._service_name, e)
-
-    # TODO: create deep copy between nested messages and ua classes
-    def _to_ros_msg(self, ua_class):
-        ros_msg = self._ros_service_req()
-        for attr in ua_class.ua_types:
-            setattr(ros_msg, attr[0], getattr(ua_class, attr[0]))
-        return ros_msg
-
-    def _to_ua_class(self, ros_msg):
-        # BUG: To deal with bug (BadEndOfStream) in calling methods with empty extension objects
-        if not len(ros_msg.__slots__):
-            return None
-        ua_class_name = getattr(self._ros_service_resp, '_type')
-        ua_class = self.get_ua_class(ua_class_name)()
-        for attr in ros_msg.__slots__:
-            setattr(ua_class, attr, getattr(ros_msg, attr))
-        return ua_class
 
 
 def refresh_services(namespace_ros, server, service_dict, idx, services_object_opc):

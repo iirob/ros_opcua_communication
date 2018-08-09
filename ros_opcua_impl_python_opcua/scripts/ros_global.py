@@ -157,10 +157,7 @@ def _get_ros_class(class_type, class_name):
         else:
             raise rospy.ROSException
         return ros_class()
-    except rospy.ROSException:
-        rospy.logfatal('Could not create %s, %s class not found!' % (class_name, class_type))
-        return None
-    except TypeError:
+    except (rospy.ROSException, TypeError):
         rospy.logfatal('Could not create %s, %s class not found!' % (class_name, class_type))
         return None
 

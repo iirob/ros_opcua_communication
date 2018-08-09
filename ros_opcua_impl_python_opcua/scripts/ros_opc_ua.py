@@ -4,6 +4,28 @@ import xml.etree.ElementTree as Et
 import re
 
 
+def _get_ua_class(ua_class_name):
+    return getattr(ua, to_camel_case(ua_class_name))
+
+
+# TODO: create deep copy between nested messages and ua classes
+def ua_class_to_ros_msg(ua_class, ros_msg_name):
+    ros_msg = ros_msg_name()
+    for attr in ua_class.ua_types:
+        setattr(ros_msg, attr[0], getattr(ua_class, attr[0]))
+    return ros_msg
+
+
+def ros_msg_to_ua_class(ros_msg, ua_class_name):
+    # BUG: To deal with bug (BadEndOfStream) in calling methods with empty extension objects
+    if not len(ros_msg.__slots__):
+        return None
+    ua_class = _get_ua_class(ua_class_name)()
+    for attr in ros_msg.__slots__:
+        setattr(ua_class, attr, getattr(ros_msg, attr))
+    return ua_class
+
+
 def nodeid_generator(idx):
     return ua.NodeId(namespaceidx=idx)
 
@@ -106,6 +128,7 @@ class OPCTypeDictionaryBuilder:
 
 
 class DataTypeDictionaryBuilder:
+
     def __init__(self, server, idx, dict_name):
         self._server = server
         self._session_server = server.get_root_node().server

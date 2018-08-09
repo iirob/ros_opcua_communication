@@ -77,7 +77,7 @@ class OpcUaROSMessage:
             self._type_dictionary.add_field(base_type_str, variable_type, msg_name, is_array)
 
     def _create_services(self):
-        """since srv can not embed another .srv, i.e. no recursion needed"""
+        """since srv can not embed another .srv, no recursion is needed"""
         services = get_ros_services()
         for srv in services:
             service = get_service_class(srv)
