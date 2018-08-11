@@ -12,7 +12,7 @@ import rostopic
 from opcua import ua, uamethod
 from opcua.ua.uaerrors import UaError
 
-from ros_opc_ua import ros_msg_to_ua_class
+from ros_opc_ua import get_ua_class, ros_msg_to_ua_class, ua_class_to_ros_msg
 
 import ros_actions
 import ros_global
@@ -21,16 +21,59 @@ import ros_messages
 
 class OpcUaROSTopicPub:
 
-    def __init__(self, topic_name, node_root, pub_node_id, msg_dict):
+    def __init__(self, topic_name, node_root, topic_node_id, msg_dict):
         self._topic_class, _, _ = rostopic.get_topic_class(topic_name)
         self._msg_name = getattr(self._topic_class, '_type')
-        self._pub = node_root.add_variable(pub_node_id, topic_name, ua.Variant(None, ua.VariantType.Null),
-                                           datatype=msg_dict[self._msg_name])
+        self._topic = node_root.add_variable(topic_node_id, topic_name, ua.Variant(None, ua.VariantType.Null),
+                                             datatype=msg_dict[self._msg_name])
+
         rospy.loginfo('Created UA variable for ROS Publication under topic: ' + topic_name)
         rospy.Subscriber(topic_name, self._topic_class, self._message_callback)
 
     def _message_callback(self, message):
-        self._pub.set_value(ros_msg_to_ua_class(message, self._msg_name))
+        self._topic.set_value(ros_msg_to_ua_class(message, get_ua_class(self._msg_name)()))
+
+
+class OpcUaROSTopicSub:
+
+    def __init__(self, topic_name, node_root, topic_node_id, manual_node_id, msg_dict):
+        self._topic_name = topic_name
+        self._topic_class, _, _ = rostopic.get_topic_class(self._topic_name)
+        self._msg_name = getattr(self._topic_class, '_type')
+        data_type_id = msg_dict[self._msg_name]
+        self._topic = node_root.add_variable(topic_node_id, self._topic_name, ua.Variant(None, ua.VariantType.Null),
+                                             datatype=data_type_id)
+        self._msg_data = get_ua_class(self._msg_name)()
+
+        self._publisher = rospy.Publisher(self._topic_name, self._topic_class, queue_size=1)
+
+        input_arg = self._create_args(self._topic_class, data_type_id)
+        self._topic.add_method(manual_node_id, 'manual publish', self._call_publish, input_arg, [])
+        rospy.loginfo('Created UA variable for ROS Subscription under ROS topic: ' + topic_name)
+
+    @uamethod
+    def _call_publish(self, parent, *inputs):
+        rospy.loginfo('Publishing data under ROS topic: %s, under node: %s' % (self._topic_name, parent.to_string()))
+        try:
+            self._publisher.publish(ua_class_to_ros_msg(inputs[0], self._topic_class()))
+            rospy.loginfo('Topic publishing succeeded!')
+            return
+        except Exception as e:
+            rospy.logerr('Error when publishing topic ' + self._topic, e)
+
+    @staticmethod
+    def _create_args(msg_class, data_type):
+        """one extension object contains all info"""
+        if not len(getattr(msg_class, '__slots__')):
+            return []
+        msg_class_name = getattr(msg_class, '_type')
+        arg = ua.Argument()
+        arg.Name = msg_class_name
+        arg.DataType = data_type
+        arg.ValueRank = -1
+        arg.ArrayDimensions = []
+        arg.Description = ua.LocalizedText(msg_class_name)
+        return [arg]
 
 
 class OpcUaROSTopic:

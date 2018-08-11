@@ -4,7 +4,7 @@ from ros_global import *
 from ros_opc_ua import to_camel_case, nodeid_generator
 from ros_messages import OpcUaROSMessage
 from ros_services import OpcUaROSService
-from ros_topics import OpcUaROSTopicPub
+from ros_topics import OpcUaROSTopicPub, OpcUaROSTopicSub
 
 
 class ROSServer(BasicROSServer):
@@ -34,7 +34,8 @@ class ROSServer(BasicROSServer):
                     continue
                 OpcUaROSTopicPub(publish, ua_node, nodeid_generator(self.idx), self.ros_msgs)
             for subscribe in node[1]['subs']:
-                pass
+                OpcUaROSTopicSub(subscribe, ua_node, nodeid_generator(self.idx),
+                                 nodeid_generator(self.idx), self.ros_msgs)
 
 
 if __name__ == '__main__':

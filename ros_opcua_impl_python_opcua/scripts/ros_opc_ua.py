@@ -3,24 +3,35 @@ from opcua import ua
 import xml.etree.ElementTree as Et
 import re
 
-
-def _get_ua_class(ua_class_name):
-    return getattr(ua, to_camel_case(ua_class_name))
+ROS_BUILD_IN_DATA_TYPES = {'bool': ua.VariantType.Boolean,
+                           'int8': ua.VariantType.SByte,
+                           'byte': ua.VariantType.SByte,  # deprecated int8
+                           'uint8': ua.VariantType.Byte,
+                           'char': ua.VariantType.Byte,  # deprecated uint8
+                           'int16': ua.VariantType.Int16,
+                           'uint16': ua.VariantType.UInt16,
+                           'int32': ua.VariantType.Int32,
+                           'uint32': ua.VariantType.UInt32,
+                           'int64': ua.VariantType.Int64,
+                           'uint64': ua.VariantType.UInt64,
+                           'float32': ua.VariantType.Float,
+                           'float64': ua.VariantType.Float,
+                           'string': ua.VariantType.String,
+                           'time': ua.VariantType.DateTime,
+                           'duration': ua.VariantType.DateTime}
 
 
 # TODO: create deep copy between nested messages and ua classes
-def ua_class_to_ros_msg(ua_class, ros_msg_name):
-    ros_msg = ros_msg_name()
+def ua_class_to_ros_msg(ua_class, ros_msg):
     for attr in ua_class.ua_types:
         setattr(ros_msg, attr[0], getattr(ua_class, attr[0]))
     return ros_msg
 
 
-def ros_msg_to_ua_class(ros_msg, ua_class_name):
+def ros_msg_to_ua_class(ros_msg, ua_class):
     # BUG: To deal with bug (BadEndOfStream) in calling methods with empty extension objects
     if not len(ros_msg.__slots__):
         return None
-    ua_class = _get_ua_class(ua_class_name)()
     for attr in ros_msg.__slots__:
         setattr(ua_class, attr, getattr(ros_msg, attr))
     return ua_class
@@ -30,21 +41,22 @@ def nodeid_generator(idx):
     return ua.NodeId(namespaceidx=idx)
 
 
+def _repl_func(m):
+    """
+    taken from
+     https://stackoverflow.com/questions/1549641/how-to-capitalize-the-first-letter-of-each-word-in-a-string-python
+     """
+    return m.group(1) + m.group(2).upper()
+
+
 def to_camel_case(name):
     """
-    Create python class name from ROS message/service strings with package name, class name is in CamelCase
+    Create python class name from an arbitrary string to CamelCase string
     e.g.                 actionlib/TestAction -> ActionlibTestAction
          turtle_actionlib/ShapeActionFeedback -> TurtleActionlibShapeActionFeedback
     """
-    def repl_func(m):
-        """
-        taken from
-         https://stackoverflow.com/questions/1549641/how-to-capitalize-the-first-letter-of-each-word-in-a-string-python
-         """
-        return m.group(1) + m.group(2).upper()
-
     name = re.sub(r'[^a-zA-Z0-9]+', ' ', name)
-    name = re.sub('(^|\s)(\S)', repl_func, name)
+    name = re.sub('(^|\s)(\S)', _repl_func, name)
     name = re.sub(r'[^a-zA-Z0-9]+', '', name)
     return name
 
@@ -129,12 +141,15 @@ class OPCTypeDictionaryBuilder:
 
 class DataTypeDictionaryBuilder:
 
-    def __init__(self, server, idx, dict_name):
+    def __init__(self, server, idx, idx_name, dict_name):
         self._server = server
         self._session_server = server.get_root_node().server
         self._idx = idx
+        # Risk of bugs using a fixed number without checking
         self._id_counter = 8000
         self.dict_id = self._add_dictionary(dict_name)
+
+        self._type_dictionary = OPCTypeDictionaryBuilder(idx_name, ROS_BUILD_IN_DATA_TYPES)
 
     def nodeid_generator(self):
         self._id_counter += 1
@@ -173,7 +188,7 @@ class DataTypeDictionaryBuilder:
     def _link_nodes(self, linked_obj_node_id, data_type_node_id, description_node_id):
         """link the three node by their node ids according to UA standard"""
         refs = [
-                # add reverse reference to BaseDataType -> Structure
+                # add reverse reference to BaseDataType -> Structure0
                 self._reference_generator(data_type_node_id, ua.NodeId(ua.ObjectIds.Structure, 0),
                                           ua.NodeId(ua.ObjectIds.HasSubtype, 0), False),
                 # add reverse reference to created data type
@@ -199,7 +214,8 @@ class DataTypeDictionaryBuilder:
                                           ua.NodeId(ua.ObjectIds.HasComponent, 0), False)]
         self._session_server.add_references(refs)
 
-    def create_data_type(self, name):
+    def create_data_type(self, type_name):
+        name = to_camel_case(type_name)
         # apply for new node id
         data_type_node_id = self.nodeid_generator()
         description_node_id = self.nodeid_generator()
@@ -213,7 +229,7 @@ class DataTypeDictionaryBuilder:
         dt_node.ParentNodeId = ua.NodeId(ua.ObjectIds.Structure, 0)
         dt_node.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasSubtype, 0)
         dt_attributes = ua.DataTypeAttributes()
-        dt_attributes.DisplayName = ua.LocalizedText(name)
+        dt_attributes.DisplayName = ua.LocalizedText(type_name)
         dt_node.NodeAttributes = dt_attributes
 
         # create description node
@@ -225,7 +241,7 @@ class DataTypeDictionaryBuilder:
         desc_node.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HasComponent, 0)
         desc_node.TypeDefinition = ua.NodeId(ua.ObjectIds.DataTypeDescriptionType, 0)
         desc_attributes = ua.VariableAttributes()
-        desc_attributes.DisplayName = ua.LocalizedText(name)
+        desc_attributes.DisplayName = ua.LocalizedText(type_name)
         desc_attributes.DataType = ua.NodeId(ua.ObjectIds.String)
         desc_attributes.Value = ua.Variant(name, ua.VariantType.String)
         desc_attributes.ValueRank = -1
@@ -247,8 +263,18 @@ class DataTypeDictionaryBuilder:
         self._session_server.add_nodes([dt_node, desc_node, obj_node])
         self._link_nodes(bind_obj_node_id, data_type_node_id, description_node_id)
 
+        self._type_dictionary.append_struct(type_name)
+
         return data_type_node_id
 
-    def set_dict_byte_string(self, value):
+    def add_field(self, type_name, variable_name, struct_name, is_array=False):
+        self._type_dictionary.add_field(type_name, variable_name, struct_name, is_array)
+
+    def set_dict_byte_string(self):
         dict_node = self._server.get_node(self.dict_id)
+        value = self._type_dictionary.get_dict_value()
         dict_node.set_value(value, ua.VariantType.ByteString)
+
+
+def get_ua_class(ua_class_name):
+    return getattr(ua, to_camel_case(ua_class_name))
