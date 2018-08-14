@@ -1,7 +1,8 @@
-from opcua.common.instantiate import instantiate
+import roslib.message
+from opcua import ua
 
-from ros_global import *
-from ros_opc_ua import *
+from ros_global import get_ros_messages, get_ros_services
+from ros_opc_ua import DataTypeDictionaryBuilder, ROS_BUILD_IN_DATA_TYPES
 
 
 def extract_array_info(type_str):
@@ -33,7 +34,7 @@ class OpcUaROSMessage:
     def _recursively_create_message(self, msg):
         if self._is_new_type(msg):
             self._create_data_type(msg)
-        message = get_message_class(msg)
+        message = roslib.message.get_message_class(msg)
         if not message:  # Broken packages
             return
         for variable_type, data_type in zip(message.__slots__, getattr(message, '_slot_types')):
@@ -61,7 +62,7 @@ class OpcUaROSMessage:
         """since srv can not embed another .srv, no recursion is needed"""
         services = get_ros_services()
         for srv in services:
-            service = get_service_class(srv)
+            service = roslib.message.get_service_class(srv)
             if not service:  # Broken packages
                 continue
             self._process_service_classes(getattr(service, '_request_class'))
@@ -104,66 +105,3 @@ def update_node_with_message(node_name, message, idx):
             # get attr_name
             if hasattr(value, child.get_browse_name().Name):
                 update_node_with_message(child,  getattr(value, child.get_browse_name().Name), idx)
-
-
-def instantiate_customized(parent, node_type, node_id=None, bname=None, idx=0):
-    """
-    Please take care that in the new version of python opcua, the dname, ie. the DisplayName is deleted from the
-     parameter list in instantiate function
-    :param parent: 
-    :param node_type: 
-    :param node_id: 
-    :param bname: BrowseName
-    :param idx: 
-    :return: 
-    """
-    nodes = instantiate(parent, node_type, nodeid=node_id, bname=bname, idx=idx)
-    new_node = nodes[0]
-    _init_node_recursively(new_node, idx)
-    return new_node
-
-
-def _init_node_recursively(node_name, idx):
-    """ 
-    This function initiate all the sub variable with complex type of customized type of the node
-    TODO: the instantiate function itself is a recursive realization, try to use the original one.
-    :param node_name: opc ua node
-    :param idx:
-    """
-    children = node_name.get_children()
-    if not (len(children) > 0):
-        return
-    for child in children:
-        if _is_variable_and_string_type(child):
-            variable_type_name = child.get_type_definition().Identifier.replace('Type', '')
-            if variable_type_name in messageNode.keys():
-                variable_type = messageNode[variable_type_name]
-                created_node = instantiate(node_name, variable_type, bname=child.get_browse_name(), idx=idx)[0]
-                _init_node_recursively(created_node, idx)
-                child.delete()
-
-
-def _is_variable_and_string_type(node_name):
-    return node_name.get_node_class() == ua.NodeClass.Variable and \
-           node_name.get_type_definition().NodeIdType == ua.NodeIdType.String  # complex type or customized type
-
-
-def update_message_instance_with_node(message, node_name):
-    """ the function try to update all message attribute with the help of node info.
-    NB: all node variable browse name must be the same name as the the message attribute """
-    variables = node_name.get_children(nodeclassmask=ua.NodeClass.Variable)
-
-    if len(variables) > 0:
-        for var in variables:
-            attr_name = var.get_browse_name().Name
-            if hasattr(message, attr_name):
-                if len(var.get_children(nodeclassmask=ua.NodeClass.Variable)) == 0:  # primitive type
-                    setattr(message, attr_name, correct_type(var, type(getattr(message, attr_name))))
-                    # var.get_value())
-                    # setattr(message, attr_name, var.get_value())
-                else:     # complex type
-                    update_message_instance_with_node(getattr(message, attr_name), var)
-
-    return message
-    # if has variables recursion
-    # else update value

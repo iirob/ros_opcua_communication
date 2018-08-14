@@ -121,7 +121,8 @@ use load_type_definitions when using extension objects in client side.
 Extension object is defined actually in data type, data type must have encoding, encoding must be an object, this object id will be bind with a UA class, which is called extension object registration, and this encoding node will not be shown in address space. The encoding type must be a member of a DataTypeDictionaryType, the dictionary will be later used for information encoding and decoding.
 
 
-## Unstable of Extension objects in UAExpert
+## Actionlib uses unique goal ID to encrypt its topic publication
 
-Using the same configuration, but sometimes the UAExpert can not display the extension object correctly. The reason is unknown.
+Problem of displaying the status of action client, if so, see [here](https://answers.ros.org/question/265723/actionlib-client-how-to-get-goal-id/)
+
 

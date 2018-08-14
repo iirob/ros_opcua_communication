@@ -20,11 +20,15 @@ ROS_BUILD_IN_DATA_TYPES = {'bool': ua.VariantType.Boolean,
                            'time': ua.VariantType.DateTime,
                            'duration': ua.VariantType.DateTime}
 
+UA_BASIC_TYPES = [item.name for item in ROS_BUILD_IN_DATA_TYPES.values()]
 
-# TODO: create deep copy between nested messages and ua classes
+
 def ua_class_to_ros_msg(ua_class, ros_msg):
     for attr in ua_class.ua_types:
-        setattr(ros_msg, attr[0], getattr(ua_class, attr[0]))
+        if attr[1] in UA_BASIC_TYPES:
+            setattr(ros_msg, attr[0], getattr(ua_class, attr[0]))
+        else:
+            ua_class_to_ros_msg(getattr(ua_class, attr[0]), getattr(ros_msg, attr[0]))
     return ros_msg
 
 
@@ -32,13 +36,30 @@ def ros_msg_to_ua_class(ros_msg, ua_class):
     # BUG: To deal with bug (BadEndOfStream) in calling methods with empty extension objects
     if not len(ros_msg.__slots__):
         return None
-    for attr in ros_msg.__slots__:
-        setattr(ua_class, attr, getattr(ros_msg, attr))
+    for attr, data_type in zip(ros_msg.__slots__, getattr(ros_msg, '_slot_types')):
+        if data_type in ROS_BUILD_IN_DATA_TYPES.keys():
+            setattr(ua_class, attr, getattr(ros_msg, attr))
+        else:
+            ros_msg_to_ua_class(getattr(ros_msg, attr), getattr(ua_class, attr))
     return ua_class
 
 
 def nodeid_generator(idx):
     return ua.NodeId(namespaceidx=idx)
+
+
+def create_args(msg_class, data_type):
+    """one extension object contains all info"""
+    if not len(getattr(msg_class, '__slots__')):
+        return []
+    msg_class_name = getattr(msg_class, '_type')
+    arg = ua.Argument()
+    arg.Name = msg_class_name
+    arg.DataType = data_type
+    arg.ValueRank = -1
+    arg.ArrayDimensions = []
+    arg.Description = ua.LocalizedText(msg_class_name)
+    return [arg]
 
 
 def _repl_func(m):

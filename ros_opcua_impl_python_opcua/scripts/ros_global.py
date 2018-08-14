@@ -1,6 +1,4 @@
-# Rewrote some ros functions need in project
 import rosgraph
-import roslib
 import rosnode
 import rospy
 import rosmsg
@@ -9,44 +7,7 @@ from rosmsg import *
 from opcua import ua, Server
 from opcua.common.ua_utils import get_nodes_of_namespace
 
-object_id_dict = {'bool': ua.ObjectIds.Boolean,
-                  'byte': ua.ObjectIds.Byte,
-                  'int': ua.ObjectIds.Int16,
-                  'int8': ua.ObjectIds.SByte,
-                  'uint8': ua.ObjectIds.Byte,
-                  'int16': ua.ObjectIds.Int16,
-                  'uint16': ua.ObjectIds.UInt16,
-                  'int32': ua.ObjectIds.Int32,
-                  'uint32': ua.ObjectIds.UInt32,
-                  'int64': ua.ObjectIds.Int64,
-                  'uint64': ua.ObjectIds.UInt64,
-                  'float': ua.ObjectIds.Float,
-                  'float32': ua.ObjectIds.Float,
-                  'float64': ua.ObjectIds.Float,
-                  'double': ua.ObjectIds.Double,
-                  'string': ua.ObjectIds.String,
-                  'str': ua.ObjectIds.String,
-                  'array': ua.ObjectIds.Enumeration,
-                  'Time': ua.ObjectIds.Time,
-                  'time': ua.ObjectIds.Time}
-
-
-# ros messages  'message' --> nodeVariableType
-messageExportPath = 'message.xml'
-new_messageExportPath = 'new_message.xml'
-messageNode = {}
-
-# ros Topics  'topic_name' --> 'topic_node'
-topicNode = {}
-
-
-def get_object_ids(type_name):
-    if type_name == 'int16':
-        rospy.logwarn('Int16??')
-    dv = object_id_dict.get(type_name, None)
-    if dv is None:
-        rospy.logerr('Can not create type with name ' + type_name)
-    return dv
+MESSAGE_EXPORT_PATH = 'message.xml'
 
 
 def _get_ros_packages(mode):
@@ -90,42 +51,6 @@ def get_ros_package(package_name):
     return list_types(package_name, mode=MODE_MSG)
 
 
-def get_nodes_info(node_name):
-    master = rosgraph.Master(node_name)
-    state = master.getSystemState()
-
-    nodes = []
-    for s in state:
-        for t, l in s:
-            nodes.extend(l)
-    nodes = list(set(nodes))
-    nodes_info_dict = {}
-    for node in nodes:
-        node_info = {'pubs': sorted([t for t, l in state[0] if node in l]),
-                     'subs': sorted([t for t, l in state[1] if node in l]),
-                     'srvs': sorted([t for t, l in state[2] if node in l])}
-        nodes_info_dict[node] = node_info
-    return nodes_info_dict
-
-
-def next_name(hierarchy, index_of_last_processed):
-    """
-    Returns the hierarchy as one string from the first remaining part on.
-    :param hierarchy:
-    :param index_of_last_processed:
-    :return:
-    """
-    try:
-        output = ''
-        counter = index_of_last_processed + 1
-        while counter < len(hierarchy):
-            output += hierarchy[counter]
-            counter += 1
-        return output
-    except Exception as ex:
-        rospy.logerr('Error encountered ', ex)
-
-
 def rosnode_cleanup():
     _, unpinged = rosnode.rosnode_ping_all()
     if unpinged:
@@ -146,28 +71,6 @@ def correct_type(node, type_message):
     else:
         rospy.logerr("can't convert: " + str(node.get_data_value.Value))
         return None
-
-
-def _get_ros_class(class_type, class_name):
-    try:
-        if class_type == 'message':
-            ros_class = roslib.message.get_message_class(class_name)
-        elif class_type == 'service':
-            ros_class = roslib.message.get_service_class(class_name)
-        else:
-            raise rospy.ROSException
-        return ros_class()
-    except (rospy.ROSException, TypeError):
-        rospy.logfatal('Could not create %s, %s class not found!' % (class_name, class_type))
-        return None
-
-
-def get_message_class(message):
-    return _get_ros_class('message', message)
-
-
-def get_service_class(service):
-    return _get_ros_class('service', service)
 
 
 class BasicROSServer:
@@ -197,8 +100,24 @@ class BasicROSServer:
         rospy.loginfo(' ----- start exporting node message to xml ------ ')
         node_to_export = get_nodes_of_namespace(self.server, [self.idx])
         rospy.loginfo(' ----- %s nodes are to be exported ------ ' % len(node_to_export))
-        self.server.export_xml(node_to_export, new_messageExportPath)
-        rospy.loginfo(' ----- node message exported to %s ------ ' % new_messageExportPath)
+        self.server.export_xml(node_to_export, MESSAGE_EXPORT_PATH)
+        rospy.loginfo(' ----- node message exported to %s ------ ' % MESSAGE_EXPORT_PATH)
 
-    def get_ros_data_type_id(self, name):
-        return self.ros_msgs[name]
+    def get_nodes_info(self, node_name):
+        master = rosgraph.Master(node_name)
+        state = master.getSystemState()
+
+        nodes = []
+        for s in state:
+            for t, l in s:
+                nodes.extend(l)
+        nodes = list(set(nodes))
+        nodes_info_dict = {}
+        for node in nodes:
+            node_info = {'pubs': sorted([t for t, l in state[0] if node in l]),
+                         'subs': sorted([t for t, l in state[1] if node in l]),
+                         'srvs': sorted([t for t, l in state[2] if node in l])}
+            # Take rosout and self away from display
+            if node not in ['/rosout', '/' + self.ros_node_name]:
+                nodes_info_dict[node] = node_info
+        return nodes_info_dict
