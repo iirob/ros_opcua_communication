@@ -2,10 +2,9 @@ import rosgraph
 import rosnode
 import rospy
 import rosmsg
-from rosmsg import *
+import rospkg
 
 from opcua import ua, Server
-from opcua.common.ua_utils import get_nodes_of_namespace
 
 MESSAGE_EXPORT_PATH = 'message.xml'
 
@@ -15,12 +14,12 @@ def _get_ros_packages(mode):
     same as the command line 'rosmsg packages'
     :return: ROS messages as a list
     """
-    return sorted([x for x in iterate_packages(rospkg.RosPack(), mode)])
+    return sorted([x for x in rosmsg.iterate_packages(rospkg.RosPack(), mode)])
 
 
 def _get_ros_msg(mode):
     ret = []
-    if mode == MODE_MSG:
+    if mode == rosmsg.MODE_MSG:
         suffix = 'msg'
     else:
         suffix = 'srv'
@@ -36,7 +35,7 @@ def get_ros_messages():
     same as the command line 'rosmsg list'
     :return: list of ros package/message pairs
     """
-    return _get_ros_msg(MODE_MSG)
+    return _get_ros_msg(rosmsg.MODE_MSG)
 
 
 def get_ros_services():
@@ -44,11 +43,11 @@ def get_ros_services():
     same as the command line 'rossrv list'
     :return: list of ros package/service pairs
     """
-    return _get_ros_msg(MODE_SRV)
+    return _get_ros_msg(rosmsg.MODE_SRV)
 
 
 def get_ros_package(package_name):
-    return list_types(package_name, mode=MODE_MSG)
+    return rosmsg.list_types(package_name, mode=rosmsg.MODE_MSG)
 
 
 def rosnode_cleanup():
@@ -74,6 +73,7 @@ def correct_type(node, type_message):
 
 
 class BasicROSServer:
+
     def __init__(self):
         self.server = Server()
 
@@ -94,13 +94,6 @@ class BasicROSServer:
 
     def start_server(self):
         self.server.start()
-
-    def export_messages(self):
-        rospy.loginfo(' ----- start exporting node message to xml ------ ')
-        node_to_export = get_nodes_of_namespace(self.server, [self.idx])
-        self.server.export_xml(node_to_export, MESSAGE_EXPORT_PATH)
-        rospy.loginfo(' ----- %s nodes are exported ------ ' % len(node_to_export))
-        rospy.loginfo(' ----- node message exported to %s ------ ' % MESSAGE_EXPORT_PATH)
 
     def import_messages(self):
         rospy.loginfo(' ----- start importing node message to xml ------ ')

@@ -131,5 +131,5 @@ Now the created extension objects can not be displayed correctly in UAExpert by 
 
 Besides, for a test case with 395 ros messages:
 
-direct generation takes 1.6s
-xml import takes 2.4s but can not work correctly
+direct generation takes about 1.6s
+xml import takes about 2.4s but works incorrectly

@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import datetime
+# import datetime
 import time
 import rospy
 
@@ -89,9 +89,9 @@ class ROSServer(BasicROSServer):
 if __name__ == '__main__':
     try:
         with ROSServer() as ua_server:
-            t = datetime.datetime.now()
+            # t = datetime.datetime.now()
             ua_server.load_messages()
-            print('costs:' + str(datetime.datetime.now() - t))
+            # print('costs:' + str(datetime.datetime.now() - t))
             ua_server.create_nodes()
             ua_server.start_server()
             while not rospy.is_shutdown():
