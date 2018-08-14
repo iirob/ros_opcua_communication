@@ -125,4 +125,11 @@ Extension object is defined actually in data type, data type must have encoding,
 
 Problem of displaying the status of action client, if so, see [here](https://answers.ros.org/question/265723/actionlib-client-how-to-get-goal-id/)
 
+## Import xml instead of directly generate messages
 
+Now the created extension objects can not be displayed correctly in UAExpert by importing xml, the reason is unknown, it seems that everything in direct generation and import are the same...
+
+Besides, for a test case with 395 ros messages:
+
+direct generation takes 1.6s
+xml import takes 2.4s but can not work correctly

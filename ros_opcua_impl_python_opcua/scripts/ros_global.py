@@ -96,12 +96,18 @@ class BasicROSServer:
         self.server.start()
 
     def export_messages(self):
-        rospy.logwarn(' ----- check if Extension Object fully supported! ------ ')
         rospy.loginfo(' ----- start exporting node message to xml ------ ')
         node_to_export = get_nodes_of_namespace(self.server, [self.idx])
-        rospy.loginfo(' ----- %s nodes are to be exported ------ ' % len(node_to_export))
         self.server.export_xml(node_to_export, MESSAGE_EXPORT_PATH)
+        rospy.loginfo(' ----- %s nodes are exported ------ ' % len(node_to_export))
         rospy.loginfo(' ----- node message exported to %s ------ ' % MESSAGE_EXPORT_PATH)
+
+    def import_messages(self):
+        rospy.loginfo(' ----- start importing node message to xml ------ ')
+        nodes = self.server.import_xml(MESSAGE_EXPORT_PATH)
+        rospy.loginfo(' ----- %s nodes are imported ------ ' % len(nodes))
+        type_dict = {self.server.get_node(node).get_display_name().Text: node for node in nodes}
+        return type_dict
 
     def get_nodes_info(self, node_name):
         master = rosgraph.Master(node_name)

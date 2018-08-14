@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import datetime
 import time
 import rospy
 
@@ -26,11 +27,9 @@ class ROSServer(BasicROSServer):
         return False
 
     def load_messages(self):
-        rospy.loginfo(' ----- start creating messages ------ ')
         self.ros_msgs = OpcUaROSMessage(self.server, self.idx, self._idx_name).create_ros_data_types()
-        # Generate python ua class according to ROSDictionary and register them
+        # self.ros_msgs = self.import_messages()
         self.server.load_type_definitions()
-        rospy.loginfo(' ----- %s messages created------ ' % str(len(self.ros_msgs)))
 
     def _delete_node(self, node_name):
         for item in self._node_items[node_name]:
@@ -90,7 +89,9 @@ class ROSServer(BasicROSServer):
 if __name__ == '__main__':
     try:
         with ROSServer() as ua_server:
+            t = datetime.datetime.now()
             ua_server.load_messages()
+            print('costs:' + str(datetime.datetime.now() - t))
             ua_server.create_nodes()
             ua_server.start_server()
             while not rospy.is_shutdown():
@@ -98,3 +99,13 @@ if __name__ == '__main__':
                 time.sleep(0.5)
     except Exception as e:
         print(e.message)
+    # ua_server = ROSServer()
+    # t = datetime.datetime.now()
+    # ua_server.load_messages()
+    # print('costs:' + str(datetime.datetime.now() - t))
+    # ua_server.create_nodes()
+    # ua_server.start_server()
+    # rospy.init_node('rosopcua', log_level=rospy.INFO)
+    # while not rospy.is_shutdown():
+    #     ua_server.refresh_nodes()
+    #     time.sleep(0.5)
