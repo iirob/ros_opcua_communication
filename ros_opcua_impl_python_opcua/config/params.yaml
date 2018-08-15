@@ -1,1 +1,11 @@
+# range of the ros topics, services and actions, default '/' means no filter
 namespace: '/'
+# True will start automatic refresh of ros nodes
+automatic_refresh: true
+# The automatic refresh time, if automatic_refresh is false this will not be considered
+refresh_cycle_time: 0.5
+# True means data types will be imported from an xml file, its address is written in ./scripts/ros_global
+# under the variable MESSAGE_EXPORT_PATH.
+# False means the data types will be generated on the fly.
+# FIXME: Please notice, do not set it to true before the bug in ./scripts/ros_server fixed.
+import_xml_msgs: false

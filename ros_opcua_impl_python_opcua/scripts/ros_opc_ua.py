@@ -24,6 +24,9 @@ UA_BASIC_TYPES = [item.name for item in ROS_BUILD_IN_DATA_TYPES.values()]
 
 
 def ua_class_to_ros_msg(ua_class, ros_msg):
+    # deal with method with empty parameters
+    if not ua_class:
+        return None
     for attr in ua_class.ua_types:
         if attr[1] in UA_BASIC_TYPES:
             setattr(ros_msg, attr[0], getattr(ua_class, attr[0]))

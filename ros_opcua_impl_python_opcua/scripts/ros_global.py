@@ -83,17 +83,22 @@ class BasicROSServer:
         self.idx = self.server.register_namespace(self._idx_name)
         self.ros_node_name = 'rosopcua'
         self.ros_msgs = None
+        self.server_started = False
+
+        self.namespace_ros = rospy.get_param('/rosopcua/namespace')
+        self.g_ns = rosgraph.names.make_global_ns(self.namespace_ros)
+        self.auto_refresh = rospy.get_param('/rosopcua/automatic_refresh')
+        self.refresh_cycle_time = rospy.get_param('/rosopcua/refresh_cycle_time')
+        self.import_xml_msgs = rospy.get_param('/rosopcua/import_xml_msgs')
 
     def __enter__(self):
         rospy.init_node(self.ros_node_name, log_level=rospy.INFO)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.server.stop()
+        if self.server_started:
+            self.server.stop()
         quit()
-
-    def start_server(self):
-        self.server.start()
 
     def import_messages(self):
         rospy.loginfo(' ----- start importing node message to xml ------ ')
@@ -102,8 +107,12 @@ class BasicROSServer:
         type_dict = {self.server.get_node(node).get_display_name().Text: node for node in nodes}
         return type_dict
 
-    def get_nodes_info(self, node_name):
-        master = rosgraph.Master(node_name)
+    def _extract_content(self, info, node):
+        return sorted([t for t, l in info if node in l and (t == self.namespace_ros or t.startswith(self.g_ns))])
+
+    def _get_ros_nodes(self):
+
+        master = rosgraph.Master(self.ros_node_name)
         state = master.getSystemState()
 
         nodes = []
@@ -113,9 +122,10 @@ class BasicROSServer:
         nodes = list(set(nodes))
         nodes_info_dict = {}
         for node in nodes:
-            node_info = {'pubs': sorted([t for t, l in state[0] if node in l]),
-                         'subs': sorted([t for t, l in state[1] if node in l]),
-                         'srvs': sorted([t for t, l in state[2] if node in l])}
+            node_info = {'pubs': self._extract_content(state[0], node),
+                         'subs': self._extract_content(state[1], node),
+                         'srvs': self._extract_content(state[2], node)}
+
             # Take rosout and self away from display
             if node not in ['/rosout', '/' + self.ros_node_name]:
                 nodes_info_dict[node] = node_info
