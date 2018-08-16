@@ -1,6 +1,6 @@
 # ros_opcua_impl_python_opcua
 
-This package provides OPC UA server implementation for connection to ROS. Server provides access to all ROS Topics and services from an  OPC UA Client. 
+This package provides OPC UA server implementation for connection to ROS. Server provides access to all ROS topics, services and actions from an  OPC UA Client. 
 
 ## Getting started with ros_opcua_impl_python_opcua package
 
