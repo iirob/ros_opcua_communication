@@ -3,67 +3,6 @@ from opcua import ua
 import xml.etree.ElementTree as Et
 import re
 
-ROS_BUILD_IN_DATA_TYPES = {'bool': ua.VariantType.Boolean,
-                           'int8': ua.VariantType.SByte,
-                           'byte': ua.VariantType.SByte,  # deprecated int8
-                           'uint8': ua.VariantType.Byte,
-                           'char': ua.VariantType.Byte,  # deprecated uint8
-                           'int16': ua.VariantType.Int16,
-                           'uint16': ua.VariantType.UInt16,
-                           'int32': ua.VariantType.Int32,
-                           'uint32': ua.VariantType.UInt32,
-                           'int64': ua.VariantType.Int64,
-                           'uint64': ua.VariantType.UInt64,
-                           'float32': ua.VariantType.Float,
-                           'float64': ua.VariantType.Float,
-                           'string': ua.VariantType.String,
-                           'time': ua.VariantType.DateTime,
-                           'duration': ua.VariantType.DateTime}
-
-UA_BASIC_TYPES = [item.name for item in ROS_BUILD_IN_DATA_TYPES.values()]
-
-
-def ua_class_to_ros_msg(ua_class, ros_msg):
-    # deal with method with empty parameters
-    if not ua_class:
-        return None
-    for attr in ua_class.ua_types:
-        if attr[1] in UA_BASIC_TYPES:
-            setattr(ros_msg, attr[0], getattr(ua_class, attr[0]))
-        else:
-            ua_class_to_ros_msg(getattr(ua_class, attr[0]), getattr(ros_msg, attr[0]))
-    return ros_msg
-
-
-def ros_msg_to_ua_class(ros_msg, ua_class):
-    # BUG: To deal with bug (BadEndOfStream) in calling methods with empty extension objects
-    if not len(ros_msg.__slots__):
-        return None
-    for attr, data_type in zip(ros_msg.__slots__, getattr(ros_msg, '_slot_types')):
-        if data_type in ROS_BUILD_IN_DATA_TYPES.keys():
-            setattr(ua_class, attr, getattr(ros_msg, attr))
-        else:
-            ros_msg_to_ua_class(getattr(ros_msg, attr), getattr(ua_class, attr))
-    return ua_class
-
-
-def nodeid_generator(idx):
-    return ua.NodeId(namespaceidx=idx)
-
-
-def create_args(msg_class, data_type):
-    """one extension object contains all info"""
-    if not len(getattr(msg_class, '__slots__')):
-        return []
-    msg_class_name = getattr(msg_class, '_type')
-    arg = ua.Argument()
-    arg.Name = msg_class_name
-    arg.DataType = data_type
-    arg.ValueRank = -1
-    arg.ArrayDimensions = []
-    arg.Description = ua.LocalizedText(msg_class_name)
-    return [arg]
-
 
 def _repl_func(m):
     """
@@ -73,7 +12,7 @@ def _repl_func(m):
     return m.group(1) + m.group(2).upper()
 
 
-def to_camel_case(name):
+def _to_camel_case(name):
     """
     Create python class name from an arbitrary string to CamelCase string
     e.g.                 actionlib/TestAction -> ActionlibTestAction
@@ -87,10 +26,10 @@ def to_camel_case(name):
 
 class OPCTypeDictionaryBuilder:
 
-    def __init__(self, idx_name, build_in_dict):
+    def __init__(self, idx_name, build_in_list):
         """
         :param idx_name: name of the name space
-        :param build_in_dict: indicates which type should be build in types,
+        :param build_in_list: indicates which type should be build in types,
         types in dict is created as opc:xxx, otherwise as tns:xxx
         """
         head_attributes = {'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance', 'xmlns:tns': idx_name,
@@ -103,22 +42,22 @@ class OPCTypeDictionaryBuilder:
         name_space.attrib['Namespace'] = 'http://opcfoundation.org/UA/'
 
         self._structs_dict = {}
-        self._build_in_dict = build_in_dict
+        self._build_in_list = build_in_list
 
     def _add_field(self, type_name, variable_name, struct_name):
-        if type_name in self._build_in_dict:
-            type_name = 'opc:' + getattr(self._build_in_dict[type_name], '_name_')
+        if type_name in self._build_in_list:
+            type_name = 'opc:' + type_name
         else:
-            type_name = 'tns:' + to_camel_case(type_name)
+            type_name = 'tns:' + _to_camel_case(type_name)
         field = Et.SubElement(self._structs_dict[struct_name], 'opc:Field')
         field.attrib['Name'] = variable_name
         field.attrib['TypeName'] = type_name
 
     def _add_array_field(self, type_name, variable_name, struct_name):
-        if type_name in self._build_in_dict:
-            type_name = 'opc:' + getattr(self._build_in_dict[type_name], '_name_')
+        if type_name in self._build_in_list:
+            type_name = 'opc:' + type_name
         else:
-            type_name = 'tns:' + to_camel_case(type_name)
+            type_name = 'tns:' + _to_camel_case(type_name)
         array_len = 'NoOf' + variable_name
         field = Et.SubElement(self._structs_dict[struct_name], 'opc:Field')
         field.attrib['Name'] = array_len
@@ -137,7 +76,7 @@ class OPCTypeDictionaryBuilder:
     def append_struct(self, name):
         appended_struct = Et.SubElement(self.etree.getroot(), 'opc:StructuredType')
         appended_struct.attrib['BaseType'] = 'ua:ExtensionObject'
-        appended_struct.attrib['Name'] = to_camel_case(name)
+        appended_struct.attrib['Name'] = _to_camel_case(name)
         self._structs_dict[name] = appended_struct
         return appended_struct
 
@@ -172,8 +111,8 @@ class DataTypeDictionaryBuilder:
         # Risk of bugs using a fixed number without checking
         self._id_counter = 8000
         self.dict_id = self._add_dictionary(dict_name)
-
-        self._type_dictionary = OPCTypeDictionaryBuilder(idx_name, ROS_BUILD_IN_DATA_TYPES)
+        ua_build_in_types = [item for item in ua.VariantType.__members__ if item != 'ExtensionObject']
+        self._type_dictionary = OPCTypeDictionaryBuilder(idx_name, ua_build_in_types)
 
     def nodeid_generator(self):
         self._id_counter += 1
@@ -239,7 +178,7 @@ class DataTypeDictionaryBuilder:
         self._session_server.add_references(refs)
 
     def create_data_type(self, type_name):
-        name = to_camel_case(type_name)
+        name = _to_camel_case(type_name)
         # apply for new node id
         data_type_node_id = self.nodeid_generator()
         description_node_id = self.nodeid_generator()
@@ -301,4 +240,4 @@ class DataTypeDictionaryBuilder:
 
 
 def get_ua_class(ua_class_name):
-    return getattr(ua, to_camel_case(ua_class_name))
+    return getattr(ua, _to_camel_case(ua_class_name))

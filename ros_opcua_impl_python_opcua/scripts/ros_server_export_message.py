@@ -4,7 +4,7 @@ import rospy
 from opcua.common.ua_utils import get_nodes_of_namespace
 
 from ros_global import BasicROSServer, MESSAGE_EXPORT_PATH
-from ros_messages import OpcUaROSMessage
+from ros_opc_ua_comm import OpcUaROSMessage
 
 
 class ROSServer(BasicROSServer):
