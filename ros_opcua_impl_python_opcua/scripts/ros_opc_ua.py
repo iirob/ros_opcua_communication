@@ -1,3 +1,6 @@
+"""
+This file is an extension of the standard python-opcua package
+"""
 from opcua import ua
 
 import xml.etree.ElementTree as Et
@@ -151,7 +154,7 @@ class DataTypeDictionaryBuilder:
     def _link_nodes(self, linked_obj_node_id, data_type_node_id, description_node_id):
         """link the three node by their node ids according to UA standard"""
         refs = [
-                # add reverse reference to BaseDataType -> Structure0
+                # add reverse reference to BaseDataType -> Structure
                 self._reference_generator(data_type_node_id, ua.NodeId(ua.ObjectIds.Structure, 0),
                                           ua.NodeId(ua.ObjectIds.HasSubtype, 0), False),
                 # add reverse reference to created data type
@@ -169,7 +172,7 @@ class DataTypeDictionaryBuilder:
                 # add has type definition link
                 self._reference_generator(description_node_id, ua.NodeId(ua.ObjectIds.DataTypeDescriptionType, 0),
                                           ua.NodeId(ua.ObjectIds.HasTypeDefinition, 0)),
-                # forward link of dict to description item
+                # add forward link of dict to description item
                 self._reference_generator(self.dict_id, description_node_id,
                                           ua.NodeId(ua.ObjectIds.HasComponent, 0)),
                 # add reverse link to dictionary
@@ -210,7 +213,7 @@ class DataTypeDictionaryBuilder:
         desc_attributes.ValueRank = -1
         desc_node.NodeAttributes = desc_attributes
 
-        # create object node python class should link to
+        # create object node which the loaded python class should link to
         obj_node = ua.AddNodesItem()
         obj_node.RequestedNewNodeId = bind_obj_node_id
         obj_node.BrowseName = ua.QualifiedName('Default Binary', 0)

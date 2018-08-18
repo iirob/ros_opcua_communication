@@ -16,7 +16,7 @@ class ROSServer(BasicROSServer):
     @staticmethod
     def _is_action(names):
         for name in names:
-            if name.split('/')[-1] in ['cancel', 'goal']:
+            if name.split('/')[-1] in ['cancel', 'goal', 'result', 'feedback', 'status']:
                 return True
         return False
 
@@ -48,27 +48,31 @@ class ROSServer(BasicROSServer):
         for service in node_content['srvs']:
             self._node_items[node_name].append(OpcUaROSService(service, srv_node,
                                                                self.nodeid_generator(), self.ros_msgs))
-        # action server
-        if self._is_action(node_content['subs']):
-            self._node_items[node_name].append(OpcUaROSActionServer(self.idx, node_name, ua_node, self.ros_msgs))
-        # action client
-        # elif self._is_action(node_content['pubs']):
-        #     self._node_items[node_name].append(OpcUaROSActionClient(self.idx, node_name, ua_node, self.ros_msgs))
         # normal topics
-        else:
-            pub_node = ua_node.add_folder(self.nodeid_generator(), 'Publications')
-            for publish in node_content['pubs']:
-                if publish == '/rosout':  # Take rosout away
-                    continue
-                self._node_items[node_name].append(OpcUaROSTopicPub(publish, pub_node,
-                                                                    self.ros_msgs, self.nodeid_generator()))
-            sub_node = ua_node.add_folder(self.nodeid_generator(), 'Subscriptions')
-            for subscribe in node_content['subs']:
-                sub = OpcUaROSTopicSub(subscribe, sub_node, self.ros_msgs, self.nodeid_generator(),
-                                       self.nodeid_generator())
-                self._node_items[node_name].append(sub)
+        pub_node = ua_node.add_folder(self.nodeid_generator(), 'Publications')
+        for publish in node_content['pubs']:
+            if publish == '/rosout':  # Take rosout away
+                continue
+            self._node_items[node_name].append(OpcUaROSTopicPub(publish, pub_node,
+                                                                self.ros_msgs, self.nodeid_generator()))
+        sub_node = ua_node.add_folder(self.nodeid_generator(), 'Subscriptions')
+        for subscribe in node_content['subs']:
+            sub = OpcUaROSTopicSub(subscribe, sub_node, self.ros_msgs, self.nodeid_generator(),
+                                   self.nodeid_generator())
+            self._node_items[node_name].append(sub)
+        # action
+        if node_content['acts']:
+            # action server
+            if node_content['acts']['is_action_server']:
+                self._node_items[node_name].append(OpcUaROSActionServer(self.idx, node_name, ua_node,
+                                                                        self.ros_msgs, node_content['acts']))
+            # action client
+            else:
+                self._node_items[node_name].append(OpcUaROSActionClient(self.idx, node_name, ua_node,
+                                                                        self.ros_msgs, node_content['acts']))
 
     def _create_nodes(self):
+        rosnode_cleanup()
         ros_nodes = self._get_ros_nodes()
         self._ros_nodes = ros_nodes
         for name, content in ros_nodes.items():
@@ -89,8 +93,7 @@ class ROSServer(BasicROSServer):
     def initialize_server(self):
         self._load_messages()
         self._create_nodes()
-        self.server.start()
-        self.server_started = True
+        self._start_server()
 
     def auto_refresh_nodes(self):
         while not rospy.is_shutdown():
@@ -113,13 +116,14 @@ class ROSServer(BasicROSServer):
 
 
 if __name__ == '__main__':
-    # try:
-    #     with ROSServer() as ua_server:
-    #         ua_server.initialize_server()
-    #         ua_server.refresh_nodes()
-    # except Exception as e:
-    #     print(e.message)
-    ua_server = ROSServer()
-    ua_server.initialize_server()
-    rospy.init_node('rosopcua', log_level=rospy.INFO)
-    ua_server.refresh_nodes()
+    try:
+        with ROSServer() as ua_server:
+            ua_server.initialize_server()
+            ua_server.refresh_nodes()
+    except Exception as e:
+        print(e.message)
+    # For debugging
+    # ua_server = ROSServer()
+    # ua_server.initialize_server()
+    # rospy.init_node('rosopcua', log_level=rospy.INFO)
+    # ua_server.refresh_nodes()

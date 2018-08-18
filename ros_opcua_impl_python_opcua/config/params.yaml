@@ -3,6 +3,7 @@ namespace: '/'
 # True will start automatic refresh of ros nodes
 automatic_refresh: true
 # The automatic refresh time, if automatic_refresh is false this will not be considered
+# The unit is second
 refresh_cycle_time: 0.5
 # True means data types will be imported from an xml file, its address is written in ./scripts/ros_global
 # under the variable MESSAGE_EXPORT_PATH.
