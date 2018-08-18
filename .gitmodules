@@ -3,4 +3,4 @@
 	url = https://github.com/FreeOpcUa/freeopcua.git
 [submodule "ros_opcua_impl_python_opcua/python-opcua"]
 	path = ros_opcua_impl_python_opcua/python-opcua
-	url = https://github.com/yangpeiren/python-opcua.git
+	url = https://github.com/FreeOpcUa/python-opcua.git
