@@ -1,8 +1,10 @@
 #!/usr/bin/python
 import time
+import rospy
 
 from ros_global import BasicROSServer, rosnode_cleanup
-from ros_opc_ua_comm import *
+from ros_opc_ua_comm import OpcUaROSMessage, OpcUaROSService, OpcUaROSTopicPub, OpcUaROSTopicSub
+from ros_opc_ua_comm import OpcUaROSActionServer, OpcUaROSActionClient
 
 
 class ROSServer(BasicROSServer):
@@ -12,16 +14,6 @@ class ROSServer(BasicROSServer):
         self._ros_nodes = {}
         self._ua_nodes = {}
         self._node_items = {}
-
-    @staticmethod
-    def _is_action(names):
-        for name in names:
-            if name.split('/')[-1] in ['cancel', 'goal', 'result', 'feedback', 'status']:
-                return True
-        return False
-
-    def nodeid_generator(self):
-        return ua.NodeId(namespaceidx=self.idx)
 
     def _load_messages(self):
         if self.import_xml_msgs:
@@ -40,25 +32,25 @@ class ROSServer(BasicROSServer):
         del self._node_items[node_name]
 
     def _create_node(self, node_name, node_content):
-        ua_node = self.server.nodes.objects.add_object(self.nodeid_generator(), node_name)
+        ua_node = self.server.nodes.objects.add_object(self._nodeid_generator(), node_name)
         self._ua_nodes[node_name] = ua_node
         self._node_items[node_name] = []
         # services
-        srv_node = ua_node.add_folder(self.nodeid_generator(), 'Services')
+        srv_node = ua_node.add_folder(self._nodeid_generator(), 'Services')
         for service in node_content['srvs']:
             self._node_items[node_name].append(OpcUaROSService(service, srv_node,
-                                                               self.nodeid_generator(), self.ros_msgs))
+                                                               self._nodeid_generator(), self.ros_msgs))
         # normal topics
-        pub_node = ua_node.add_folder(self.nodeid_generator(), 'Publications')
+        pub_node = ua_node.add_folder(self._nodeid_generator(), 'Publications')
         for publish in node_content['pubs']:
             if publish == '/rosout':  # Take rosout away
                 continue
             self._node_items[node_name].append(OpcUaROSTopicPub(publish, pub_node,
-                                                                self.ros_msgs, self.nodeid_generator()))
-        sub_node = ua_node.add_folder(self.nodeid_generator(), 'Subscriptions')
+                                                                self.ros_msgs, self._nodeid_generator()))
+        sub_node = ua_node.add_folder(self._nodeid_generator(), 'Subscriptions')
         for subscribe in node_content['subs']:
-            sub = OpcUaROSTopicSub(subscribe, sub_node, self.ros_msgs, self.nodeid_generator(),
-                                   self.nodeid_generator())
+            sub = OpcUaROSTopicSub(subscribe, sub_node, self.ros_msgs, self._nodeid_generator(),
+                                   self._nodeid_generator())
             self._node_items[node_name].append(sub)
         # action
         if node_content['acts']:

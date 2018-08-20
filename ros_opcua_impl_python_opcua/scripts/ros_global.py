@@ -4,7 +4,7 @@ import rospy
 import rosmsg
 import rospkg
 
-from opcua import Server
+from opcua import ua, Server
 
 MESSAGE_EXPORT_PATH = 'message.xml'
 
@@ -100,6 +100,9 @@ class BasicROSServer:
         if self.server_started:
             self.server.stop()
         quit()
+
+    def _nodeid_generator(self):
+        return ua.NodeId(namespaceidx=self.idx)
 
     def _start_server(self):
         self.server.start()

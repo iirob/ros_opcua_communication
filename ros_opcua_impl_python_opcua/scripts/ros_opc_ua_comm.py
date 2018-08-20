@@ -128,8 +128,9 @@ class OpcUaROSMessage:
         return message not in _ros_build_in_types and message not in self._created_data_types
 
     def _create_data_type(self, type_name):
-        new_dt_id = self._dict_builder.create_data_type(type_name)
-        self._created_data_types[type_name] = new_dt_id
+        new_dt = self._dict_builder.create_data_type(type_name)
+        self._created_data_types[type_name] = new_dt.data_type
+        return new_dt
 
     def _recursively_create_message(self, msg):
         if self._is_new_type(msg):
@@ -153,10 +154,10 @@ class OpcUaROSMessage:
 
     def _process_service_classes(self, srv):
         msg_name = getattr(srv, '_type')
-        self._create_data_type(msg_name)
+        new_struct = self._create_data_type(msg_name)
         for variable_type, data_type in zip(srv.__slots__, getattr(srv, '_slot_types')):
             base_type_str, is_array = _extract_ros_array_info(data_type)
-            self._dict_builder.add_field(_process_type(base_type_str), variable_type, msg_name, is_array)
+            new_struct.add_field(variable_type, _process_type(base_type_str), is_array)
 
     def _create_services(self):
         """since srv can not embed another .srv, no recursion is needed"""
