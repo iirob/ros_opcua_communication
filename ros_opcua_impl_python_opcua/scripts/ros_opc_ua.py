@@ -74,13 +74,13 @@ class OPCTypeDictionaryBuilder:
         field.attrib['TypeName'] = type_name
         field.attrib['LengthField'] = array_len
 
-    def add_field(self, type_name, variable_name, struct_name, is_array=False):
-        if isinstance(type_name, Enum):
-            type_name = type_name.name
+    def add_field(self, variable_name, data_type, struct_name, is_array=False):
+        if isinstance(data_type, Enum):
+            data_type = data_type.name
         if is_array:
-            self._add_array_field(type_name, variable_name, struct_name)
+            self._add_array_field(data_type, variable_name, struct_name)
         else:
-            self._add_field(type_name, variable_name, struct_name)
+            self._add_field(data_type, variable_name, struct_name)
 
     def append_struct(self, name):
         appended_struct = Et.SubElement(self.etree.getroot(), 'opc:StructuredType')
@@ -159,33 +159,33 @@ class DataTypeDictionaryBuilder:
     def _link_nodes(self, linked_obj_node_id, data_type_node_id, description_node_id):
         """link the three node by their node ids according to UA standard"""
         refs = [
-                # add reverse reference to BaseDataType -> Structure
-                _reference_generator(data_type_node_id, ua.NodeId(ua.ObjectIds.Structure, 0),
-                                     ua.NodeId(ua.ObjectIds.HasSubtype, 0), False),
-                # add reverse reference to created data type
-                _reference_generator(linked_obj_node_id, data_type_node_id,
-                                     ua.NodeId(ua.ObjectIds.HasEncoding, 0), False),
-                # add HasDescription link to dictionary description
-                _reference_generator(linked_obj_node_id, description_node_id,
-                                     ua.NodeId(ua.ObjectIds.HasDescription, 0)),
-                # add reverse HasDescription link
-                _reference_generator(description_node_id, linked_obj_node_id,
-                                     ua.NodeId(ua.ObjectIds.HasDescription, 0), False),
-                # add link to the type definition node
-                _reference_generator(linked_obj_node_id, ua.NodeId(ua.ObjectIds.DataTypeEncodingType, 0),
-                                     ua.NodeId(ua.ObjectIds.HasTypeDefinition, 0)),
-                # add has type definition link
-                _reference_generator(description_node_id, ua.NodeId(ua.ObjectIds.DataTypeDescriptionType, 0),
-                                     ua.NodeId(ua.ObjectIds.HasTypeDefinition, 0)),
-                # add forward link of dict to description item
-                _reference_generator(self.dict_id, description_node_id,
-                                     ua.NodeId(ua.ObjectIds.HasComponent, 0)),
-                # add reverse link to dictionary
-                _reference_generator(description_node_id, self.dict_id,
-                                     ua.NodeId(ua.ObjectIds.HasComponent, 0), False)]
+            # add reverse reference to BaseDataType -> Structure
+            _reference_generator(data_type_node_id, ua.NodeId(ua.ObjectIds.Structure, 0),
+                                 ua.NodeId(ua.ObjectIds.HasSubtype, 0), False),
+            # add reverse reference to created data type
+            _reference_generator(linked_obj_node_id, data_type_node_id,
+                                 ua.NodeId(ua.ObjectIds.HasEncoding, 0), False),
+            # add HasDescription link to dictionary description
+            _reference_generator(linked_obj_node_id, description_node_id,
+                                 ua.NodeId(ua.ObjectIds.HasDescription, 0)),
+            # add reverse HasDescription link
+            _reference_generator(description_node_id, linked_obj_node_id,
+                                 ua.NodeId(ua.ObjectIds.HasDescription, 0), False),
+            # add link to the type definition node
+            _reference_generator(linked_obj_node_id, ua.NodeId(ua.ObjectIds.DataTypeEncodingType, 0),
+                                 ua.NodeId(ua.ObjectIds.HasTypeDefinition, 0)),
+            # add has type definition link
+            _reference_generator(description_node_id, ua.NodeId(ua.ObjectIds.DataTypeDescriptionType, 0),
+                                 ua.NodeId(ua.ObjectIds.HasTypeDefinition, 0)),
+            # add forward link of dict to description item
+            _reference_generator(self.dict_id, description_node_id,
+                                 ua.NodeId(ua.ObjectIds.HasComponent, 0)),
+            # add reverse link to dictionary
+            _reference_generator(description_node_id, self.dict_id,
+                                 ua.NodeId(ua.ObjectIds.HasComponent, 0), False)]
         self._session_server.add_references(refs)
 
-    def create_data_type(self, type_name):
+    def _create_data_type(self, type_name):
         name = _to_camel_case(type_name)
         # apply for new node id
         data_type_node_id = self._nodeid_generator()
@@ -237,8 +237,11 @@ class DataTypeDictionaryBuilder:
         self._type_dictionary.append_struct(type_name)
         return StructNode(self, data_type_node_id, type_name)
 
-    def add_field(self, type_name, variable_name, struct_name, is_array=False):
-        self._type_dictionary.add_field(type_name, variable_name, struct_name, is_array)
+    def create_data_type(self, type_name):
+        return self._create_data_type(type_name)
+
+    def add_field(self, variable_name, data_type, struct_name, is_array=False):
+        self._type_dictionary.add_field(variable_name, data_type, struct_name, is_array)
 
     def set_dict_byte_string(self):
         dict_node = self._server.get_node(self.dict_id)
@@ -254,11 +257,11 @@ class StructNode:
         self.name = name
         pass
 
-    def add_field(self, type_name, field_name, is_array=False):
+    def add_field(self, field_name, data_type, is_array=False):
         # nested structure could directly use simple structure as field
-        if isinstance(field_name, StructNode):
-            field_name = field_name.name
-        self._type_dict.add_field(field_name, type_name, self.name, is_array)
+        if isinstance(data_type, StructNode):
+            data_type = data_type.name
+        self._type_dict.add_field(field_name, data_type, self.name, is_array)
 
 
 def get_ua_class(ua_class_name):
