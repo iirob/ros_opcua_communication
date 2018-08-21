@@ -7,7 +7,7 @@ import actionlib
 
 from opcua import ua, uamethod
 
-from ros_opc_ua import DataTypeDictionaryBuilder, get_ua_class
+from ros_opc_ua import DataTypeDictionaryBuilder, StructNode, get_ua_class
 from ros_global import get_ros_messages, get_ros_services
 
 _ros_build_in_types = {'bool': ua.VariantType.Boolean,
@@ -121,21 +121,22 @@ class OpcUaROSMessage:
         self._server = server
         self._idx = idx
 
-        self._created_data_types = {}
+        self._created_struct_nodes = {}
         self._dict_builder = DataTypeDictionaryBuilder(server, idx, idx_name, 'ROSDictionary')
 
     def _is_new_type(self, message):
-        return message not in _ros_build_in_types and message not in self._created_data_types
+        if isinstance(message, StructNode):
+            message = message.name
+        return message not in _ros_build_in_types and message not in self._created_struct_nodes
 
     def _create_data_type(self, type_name):
         new_dt = self._dict_builder.create_data_type(type_name)
-        self._created_data_types[type_name] = new_dt.data_type
+        self._created_struct_nodes[type_name] = new_dt
         return new_dt
 
     def _recursively_create_message(self, msg):
-        if self._is_new_type(msg):
-            self._create_data_type(msg)
-        message = roslib.message.get_message_class(msg)
+        msg = self._create_data_type(msg) if self._is_new_type(msg) else self._created_struct_nodes[msg]
+        message = roslib.message.get_message_class(msg.name)
         if not message:  # Broken packages
             return
         for variable_type, data_type in zip(message.__slots__, getattr(message, '_slot_types')):
@@ -144,12 +145,12 @@ class OpcUaROSMessage:
                 self._create_data_type(base_type_str)
                 self._recursively_create_message(base_type_str)
 
-            self._dict_builder.add_field(variable_type, _process_type(base_type_str), msg, is_array)
+            msg.add_field(variable_type, _process_type(base_type_str), is_array)
 
     def _create_messages(self):
         messages = get_ros_messages()
         for msg in messages:
-            if msg not in self._created_data_types:
+            if msg not in self._created_struct_nodes:
                 self._recursively_create_message(msg)
 
     def _process_service_classes(self, srv):
@@ -173,7 +174,8 @@ class OpcUaROSMessage:
         self._create_messages()
         self._create_services()
         self._dict_builder.set_dict_byte_string()
-        return self._created_data_types
+        data_types = {key: value.data_type for key, value in self._created_struct_nodes.items()}
+        return data_types
 
 
 class OpcUaROSService:
