@@ -7,7 +7,7 @@ import actionlib
 
 from opcua import ua, uamethod
 
-from ros_opc_ua import DataTypeDictionaryBuilder, StructNode, get_ua_class
+from ros_opc_ua import DataTypeDictionaryBuilder, get_ua_class
 from ros_global import get_ros_messages, get_ros_services
 
 _ros_build_in_types = {'bool': ua.VariantType.Boolean,
@@ -110,9 +110,9 @@ def _extract_ros_array_info(type_str):
     return type_str, is_array
 
 
-def _process_type(type_name):
+def _lookup_type(type_name):
     if type_name in _ros_build_in_types:
-        return _ros_build_in_types[type_name].name
+        return _ros_build_in_types[type_name]
     return type_name
 
 
@@ -125,7 +125,7 @@ class OpcUaROSMessage:
         self._dict_builder = DataTypeDictionaryBuilder(server, idx, idx_name, 'ROSDictionary')
 
     def _is_new_type(self, message):
-        if isinstance(message, StructNode):
+        if not isinstance(message, str):
             message = message.name
         return message not in _ros_build_in_types and message not in self._created_struct_nodes
 
@@ -145,7 +145,7 @@ class OpcUaROSMessage:
                 self._create_data_type(base_type_str)
                 self._recursively_create_message(base_type_str)
 
-            msg.add_field(variable_type, _process_type(base_type_str), is_array)
+            msg.add_field(variable_type, _lookup_type(base_type_str), is_array)
 
     def _create_messages(self):
         messages = get_ros_messages()
@@ -158,7 +158,7 @@ class OpcUaROSMessage:
         new_struct = self._create_data_type(msg_name)
         for variable_type, data_type in zip(srv.__slots__, getattr(srv, '_slot_types')):
             base_type_str, is_array = _extract_ros_array_info(data_type)
-            new_struct.add_field(variable_type, _process_type(base_type_str), is_array)
+            new_struct.add_field(variable_type, _lookup_type(base_type_str), is_array)
 
     def _create_services(self):
         """since srv can not embed another .srv, no recursion is needed"""
@@ -324,7 +324,7 @@ class OpcUaROSActionClient(OpcUaROSAction):
         self._goal_handler = rospy.Subscriber(topics['goal'], self._goal_class, self._goal_callback)
         self._result_handler = rospy.Subscriber(topics['result'], self._result_class, self._result_callback)
         self._feedback_handler = rospy.Subscriber(topics['feedback'], self._feedback_class, self._feedback_callback)
-        # FIXME: status in action client seem to be always empty, if try to acquire with stand msg class.
+        # FIXME: status in action client seem to be always empty, if try to acquire with standard msg class.
         # status_class, _, _ = rostopic.get_topic_class(topics['status'])
         # self._status_handler = rospy.Subscriber(topics['status'], status_class, self._status_callback)
 
