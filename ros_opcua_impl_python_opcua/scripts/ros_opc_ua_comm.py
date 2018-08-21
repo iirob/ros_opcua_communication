@@ -144,7 +144,7 @@ class OpcUaROSMessage:
                 self._create_data_type(base_type_str)
                 self._recursively_create_message(base_type_str)
 
-            self._dict_builder.add_field(_process_type(base_type_str), variable_type, msg, is_array)
+            self._dict_builder.add_field(variable_type, _process_type(base_type_str), msg, is_array)
 
     def _create_messages(self):
         messages = get_ros_messages()
