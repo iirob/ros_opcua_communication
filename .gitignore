@@ -3,3 +3,4 @@
 .idea
 venv
 ros_opcua_impl_python_opcua/scripts/*.xml
+ros_opcua_impl_python_opcua/export/*.xml
