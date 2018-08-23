@@ -6,7 +6,7 @@ automatic_refresh: true
 # The unit is second
 refresh_cycle_time: 0.5
 # True means data types will be imported from an xml file, its address is written in ./scripts/ros_global
-# under the variable MESSAGE_EXPORT_PATH.
+# under the variable message_export_path.
 # False means the data types will be generated on the fly.
 # FIXME: Please notice, do not set it to true before the bug in ./scripts/ros_server fixed.
 import_xml_msgs: false

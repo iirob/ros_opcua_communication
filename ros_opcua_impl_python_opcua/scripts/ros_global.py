@@ -6,7 +6,7 @@ import rospkg
 
 from opcua import ua, Server
 
-MESSAGE_EXPORT_PATH = 'message.xml'
+message_export_path = 'message.xml'
 
 _action_feature_list = ['cancel', 'goal', 'result', 'feedback', 'status']
 
@@ -56,9 +56,13 @@ def rosnode_cleanup():
 
 
 def _is_action(name_list, feature_list):
+    # at least two features should match
+    feature_counter = 0
     for name in name_list:
         if name.split('/')[-1] in feature_list:
-            return True
+            feature_counter = feature_counter + 1
+    if feature_counter >= 2:
+        return True
     return False
 
 
@@ -111,7 +115,7 @@ class BasicROSServer:
 
     def import_messages(self):
         rospy.loginfo(' ----- start importing node message to xml ------ ')
-        nodes = self.server.import_xml(MESSAGE_EXPORT_PATH)
+        nodes = self.server.import_xml(message_export_path)
         rospy.loginfo(' ----- %s nodes are imported ------ ' % len(nodes))
         type_dict = {self.server.get_node(node).get_display_name().Text: node for node in nodes}
         return type_dict
