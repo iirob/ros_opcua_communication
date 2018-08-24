@@ -1,19 +1,10 @@
 #!/usr/bin/python
 import time
 import rospy
-import rosnode
-import rosgraph
 
 from opcua import ua
-from ros_info_manage import nodeid_generator, ROSBasicServer, ROSServiceManager
-from ros_info_manage import ROSTopicManager, ROSNodeManager, ROSParamManager, ROSInfoAgent
-
-
-def _rosnode_cleanup():
-    _, unpinged = rosnode.rosnode_ping_all()
-    if unpinged:
-        master = rosgraph.Master(rosnode.ID)
-        rosnode.cleanup_master_blacklist(master, unpinged)
+from ros_info_manage import ROSBasicServer, ROSServiceManager, ROSTopicManager
+from ros_info_manage import ROSNodeManager, ROSParamManager, ROSInfoAgent
 
 
 class ROSServer(ROSBasicServer):
@@ -21,45 +12,45 @@ class ROSServer(ROSBasicServer):
     def __init__(self):
         ROSBasicServer.__init__(self)
         self._root = self._server.nodes.objects
-        self._msg_folder = self._root.add_folder(nodeid_generator(self._idx), 'rosmsg')
-        self._srv_folder = self._root.add_folder(nodeid_generator(self._idx), 'rossrv')
+        self._msg_folder = self._root.add_folder(self._nodeid_generator(), 'rosmsg')
+        self._srv_folder = self._root.add_folder(self._nodeid_generator(), 'rossrv')
 
         self._agent = ROSInfoAgent(self._ros_node_name, self._namespace_ros)
 
     def _load_messages(self):
+        # FIXME: 1. bugs after xml import, extension object can not be used
+        # 2. should compare in system to get correct msgs and srvs after xml loaded.
         if self._import_xml_msgs:
-            # FIXME: 1. bugs after import, extension object can not be used
-            # FIXME: 2. should compare in system to get correct msgs and srvs
             self._type_list = self.import_messages()
         else:
             self.load_messages()
 
         self._server.load_type_definitions()
+        self._create_static_info()
 
     def _create_static_info(self):
         """
         show rosmsg and rossrv in ua server
         :return:
         """
-        for msg in self._ros_msgs:
-            self._msg_folder.add_reference(self._ros_msgs[msg], ua.ObjectIds.Organizes)
-        for srv in self._ros_srvs:
-            self._srv_folder.add_reference(self._ros_srvs[srv], ua.ObjectIds.Organizes)
+        for msg in self._msgs_dict:
+            self._msg_folder.add_reference(self._msgs_dict[msg], ua.ObjectIds.Organizes)
+        for srv in self._srvs_dict:
+            self._srv_folder.add_reference(self._srvs_dict[srv], ua.ObjectIds.Organizes)
 
-    def _create_info_managers(self):
-        self._service_manager = ROSServiceManager(self._idx, self._root, self._type_list)
+    def _initialize_info_managers(self):
+        self._service_manager = ROSServiceManager(self._idx, self._root, self._type_dict)
+        self._topic_manager = ROSTopicManager(self._idx, self._root, self._type_dict)
+
         service_ua_nodes = self._service_manager.get_node_dict()
-
-        self._topic_manager = ROSTopicManager(self._idx, self._root, self._type_list)
         topic_status_nodes = self._topic_manager.get_status_ua_node()
         topic_publish_nodes = self._topic_manager.get_publish_ua_node()
-
-        self._node_manager = ROSNodeManager(self._idx, self._root, self._type_list, service_ua_nodes,
+        self._node_manager = ROSNodeManager(self._idx, self._root, self._type_dict, service_ua_nodes,
                                             topic_status_nodes, topic_publish_nodes)
         self._param_manager = ROSParamManager(self._idx, self._root)
 
     def _refresh_info(self):
-        _rosnode_cleanup()
+        self._agent.node_cleanup()
         current_nodes, current_services, current_topics, current_params = self._agent.get_ros_info()
         self._service_manager.refresh_services(current_services)
         self._topic_manager.refresh_topics(current_topics)
@@ -73,8 +64,7 @@ class ROSServer(ROSBasicServer):
 
     def initialize_server(self):
         self._load_messages()
-        self._create_static_info()
-        self._create_info_managers()
+        self._initialize_info_managers()
         self._start_server()
 
     def refresh(self):
@@ -95,8 +85,3 @@ if __name__ == '__main__':
             ua_server.refresh()
     except Exception as e:
         print(e.message)
-    # For debugging
-    # ua_server = ROSServer()
-    # ua_server.initialize_server()
-    # rospy.init_node('rosopcua', log_level=rospy.INFO)
-    # ua_server.refresh()
