@@ -2,7 +2,7 @@
 import rospy
 
 from opcua.common.ua_utils import get_nodes_of_namespace
-from ros_info_manage import ROSBasicServer
+from basic_server_client import ROSBasicServer
 
 
 class ROSServer(ROSBasicServer):

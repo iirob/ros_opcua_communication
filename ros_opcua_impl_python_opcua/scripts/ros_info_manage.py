@@ -2,10 +2,9 @@ import rospy
 import rosgraph
 import rosnode
 
-from opcua import ua, Server
-from ros_opc_ua_comm import OpcUaROSMessage, OpcUaROSService, OpcUaROSTopic
+from opcua import ua
+from ros_opc_ua_comm import OpcUaROSService, OpcUaROSTopic
 
-message_export_path = 'message.xml'
 _action_feature_list = ('cancel', 'goal', 'result', 'feedback', 'status')
 
 
@@ -273,56 +272,3 @@ class ROSInfoAgent:
         _, unpinged = rosnode.rosnode_ping_all()
         if unpinged:
             rosnode.cleanup_master_blacklist(self._master, unpinged)
-
-
-class ROSBasicServer:
-
-    def __init__(self):
-        self._server = Server()
-
-        self._server.set_endpoint('opc.tcp://0.0.0.0:21554/ROSServer')
-        self._server.set_server_name('ROS UA Server')
-        self._idx_name = 'http://ros.org/rosopcua'
-        self._idx = self._server.register_namespace(self._idx_name)
-        self._ros_node_name = 'rosopcua'
-        self._message_path = message_export_path
-        self._server_started = False
-
-        self._namespace_ros = rospy.get_param('/rosopcua/namespace')
-        self._auto_refresh = rospy.get_param('/rosopcua/automatic_refresh')
-        self._refresh_cycle_time = rospy.get_param('/rosopcua/refresh_cycle_time')
-        self._import_xml_msgs = rospy.get_param('/rosopcua/import_xml_msgs')
-
-        self._type_dict = {}
-        self._msgs_dict = {}
-        self._srvs_dict = {}
-
-    def __enter__(self):
-        rospy.init_node(self._ros_node_name, log_level=rospy.INFO)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self._server_started:
-            self._server.stop()
-            rospy.loginfo(' ----- Server stopped! ------ ')
-
-    def _nodeid_generator(self):
-        return _nodeid_generator(self._idx)
-
-    def _start_server(self):
-        self._server.start()
-        self._server_started = True
-        rospy.loginfo(' ----- Server started! ------ ')
-
-    def import_messages(self):
-        rospy.loginfo(' ----- start importing node message to xml ------ ')
-        nodes = self._server.import_xml(self._message_path)
-        rospy.loginfo(' ----- {} nodes are imported ------ '.format(len(nodes)))
-        type_dict = {self._server.get_node(node).get_display_name().Text: node for node in nodes}
-        return type_dict
-
-    def load_messages(self):
-        rospy.loginfo(' ----- Creating messages ------ ')
-        ros_type_creator = OpcUaROSMessage(self._server, self._idx, self._idx_name)
-        self._type_dict, self._msgs_dict, self._srvs_dict = ros_type_creator.create_ros_data_types()
-        rospy.loginfo(' ----- {} messages created------ '.format(str(len(self._type_dict))))
