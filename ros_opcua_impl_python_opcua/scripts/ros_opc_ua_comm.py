@@ -3,14 +3,11 @@ import rospy
 import roslib.message
 import rostopic
 import rosservice
-import rosgraph
 import rosmsg
 import rospkg
 
-from opcua import ua, Server, uamethod
+from opcua import ua, uamethod
 from opcua.common.type_dictionary_buider import DataTypeDictionaryBuilder, get_ua_class
-
-message_export_path = 'message.xml'
 
 _ros_build_in_types = {'bool': ua.VariantType.Boolean,
                        'int8': ua.VariantType.SByte,
@@ -28,7 +25,6 @@ _ros_build_in_types = {'bool': ua.VariantType.Boolean,
                        'string': ua.VariantType.String}
 
 _ua_basic_types = [item.name for item in _ros_build_in_types.values()]
-_action_feature_list = ('cancel', 'goal', 'result', 'feedback', 'status')
 
 
 def _lookup_type(type_name):
@@ -56,10 +52,6 @@ def _get_ros_msg(mode):
         for file_name in getattr(rosmsg, '_list_types')(directory, suffix, mode):
             ret.append(p + '/' + file_name)
     return ret
-
-
-def _nodeid_generator(idx):
-    return ua.NodeId(namespaceidx=idx)
 
 
 def _extract_ua_array_info(type_str):
@@ -214,8 +206,8 @@ class OpcUaROSService:
 
     @uamethod
     def _call_service(self, _, *inputs):
-        rospy.loginfo('Calling service %s under ROS node: %s'
-                      % (self._service_name, self._node_root.get_display_name().Text))
+        rospy.loginfo('Calling service {0} under ROS node: {1}'.format(self._service_name,
+                                                                       self._node_root.get_display_name().Text))
         try:
             ua_class = inputs[0] if inputs else get_ua_class(self._req_name)()
             response = self._proxy(_to_ros_msg(ua_class, self._ros_service_req()))
@@ -275,118 +267,3 @@ class OpcUaROSTopic:
         self._topic.delete()
         self._pub_handler.unregister()
         rospy.loginfo('Deleted ROS Topic: ' + self._topic_name)
-
-
-def _is_action(name_list, feature_list):
-    # at least two features should match
-    feature_counter = 0
-    for name in name_list:
-        if name.split('/')[-1] in feature_list:
-            feature_counter = feature_counter + 1
-    if feature_counter >= 2:
-        return True
-    return False
-
-
-def _add_action(pub_list, sub_list):
-    name_list = pub_list + sub_list
-    action_list = {'is_action_server': True if _is_action(sub_list, ['goal', 'cancel']) else False,
-                   'topics': [n for n in name_list if n.split('/')[-1] in _action_feature_list]}
-    return action_list
-
-
-def _del_action(name_list):
-    return [n for n in name_list if n.split('/')[-1] not in _action_feature_list]
-
-
-class BasicROSServer:
-
-    def __init__(self):
-        self._server = Server()
-
-        self._server.set_endpoint('opc.tcp://0.0.0.0:21554/RosServer')
-        self._server.set_server_name('ROS UA Server')
-        self._idx_name = 'http://ros.org/rosopcua'
-        self._idx = self._server.register_namespace(self._idx_name)
-        self.ros_node_name = 'rosopcua'
-        self._server_started = False
-
-        self.namespace_ros = rospy.get_param('/rosopcua/namespace')
-        self.auto_refresh = rospy.get_param('/rosopcua/automatic_refresh')
-        self.refresh_cycle_time = rospy.get_param('/rosopcua/refresh_cycle_time')
-        self.import_xml_msgs = rospy.get_param('/rosopcua/import_xml_msgs')
-        self.g_ns = rosgraph.names.make_global_ns(self.namespace_ros)
-
-        self._exclude_list = ['rosout', '/rosout', self.ros_node_name, '/' + self.ros_node_name]
-
-        self._type_list = None
-        self._ros_msgs = None
-        self._ros_srvs = None
-
-    def __enter__(self):
-        rospy.init_node(self.ros_node_name, log_level=rospy.INFO)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self._server_started:
-            self._server.stop()
-        quit()
-
-    def _nodeid_generator(self):
-        return _nodeid_generator(self._idx)
-
-    def _start_server(self):
-        self._server.start()
-        self._server_started = True
-        rospy.loginfo(' ----- Server started! ------ ')
-
-    def _extract_info(self, info):
-        return sorted([t for t, l in info if (t == self.namespace_ros or t.startswith(self.g_ns))
-                       and t not in self._exclude_list and not (len(l) == 1 and l[0] in self._exclude_list)])
-
-    def _extract_node_info(self, info, node):
-        return sorted([t for t, l in info if t not in self._exclude_list
-                       and (t == self.namespace_ros or t.startswith(self.g_ns))
-                       and node in l and not (len(l) == 1 and l[0] in self._exclude_list)])
-
-    def _get_ros_info(self):
-        master = rosgraph.Master(self.ros_node_name)
-        state = master.getSystemState()
-        params = {key: value for key, value in master.getParam(self.namespace_ros).items()
-                  if key not in self._exclude_list}
-
-        nodes = []
-        for s in state:
-            for t, l in s:
-                nodes.extend(l)
-        nodes = [node for node in list(set(nodes)) if node.split('/')[-1] not in self._exclude_list]
-
-        topics = self._extract_info(state[0])
-        topics += self._extract_info(state[1])
-        services = self._extract_info(state[2])
-
-        nodes_info_dict = {}
-        for node in nodes:
-            node_info = {'pubs': self._extract_node_info(state[0], node),
-                         'subs': self._extract_node_info(state[1], node),
-                         'srvs': self._extract_node_info(state[2], node),
-                         'acts': {}}
-            if _is_action(node_info['pubs'], _action_feature_list):
-                node_info['acts'] = _add_action(node_info['pubs'], node_info['subs'])
-                node_info['pubs'] = _del_action(node_info['pubs'])
-                node_info['subs'] = _del_action(node_info['subs'])
-            nodes_info_dict[node] = node_info
-        return nodes_info_dict, services, list(set(topics)), params
-
-    def import_messages(self):
-        rospy.loginfo(' ----- start importing node message to xml ------ ')
-        nodes = self._server.import_xml(message_export_path)
-        rospy.loginfo(' ----- %s nodes are imported ------ ' % len(nodes))
-        type_dict = {self._server.get_node(node).get_display_name().Text: node for node in nodes}
-        return type_dict
-
-    def load_messages(self):
-        rospy.loginfo(' ----- Creating messages ------ ')
-        ros_type_creator = OpcUaROSMessage(self._server, self._idx, self._idx_name)
-        self._type_list, self._ros_msgs, self._ros_srvs = ros_type_creator.create_ros_data_types()
-        rospy.loginfo(' ----- %s messages created------ ' % str(len(self._type_list)))
