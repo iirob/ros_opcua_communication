@@ -3,12 +3,14 @@ import rospy
 import roslib.message
 import rostopic
 import rosservice
-import actionlib
+import rosgraph
+import rosmsg
+import rospkg
 
-from opcua import ua, uamethod
+from opcua import ua, Server, uamethod
+from opcua.common.type_dictionary_buider import DataTypeDictionaryBuilder, get_ua_class
 
-from ros_opc_ua import DataTypeDictionaryBuilder, get_ua_class
-from ros_global import get_ros_messages, get_ros_services
+message_export_path = 'message.xml'
 
 _ros_build_in_types = {'bool': ua.VariantType.Boolean,
                        'int8': ua.VariantType.SByte,
@@ -23,45 +25,65 @@ _ros_build_in_types = {'bool': ua.VariantType.Boolean,
                        'uint64': ua.VariantType.UInt64,
                        'float32': ua.VariantType.Float,
                        'float64': ua.VariantType.Float,
-                       'string': ua.VariantType.String,
-                       'time': ua.VariantType.DateTime,
-                       'duration': ua.VariantType.DateTime}
+                       'string': ua.VariantType.String}
 
 _ua_basic_types = [item.name for item in _ros_build_in_types.values()]
+_action_feature_list = ('cancel', 'goal', 'result', 'feedback', 'status')
 
-_ros_goal_status = {9: 'GOAL LOST',
-                    8: 'GOAL RECALLED',
-                    7: 'GOAL RECALLING',
-                    6: 'GOAL PREEMPTING',
-                    5: 'GOAL REJECTED',
-                    4: 'GOAL ABORTED',
-                    3: 'GOAL SUCCEEDED',
-                    2: 'GOAL PREEMPTED',
-                    1: 'GOAL ACTIVE',
-                    0: 'GOAL PENDING'}
+
+def _lookup_type(type_name):
+    if type_name in _ros_build_in_types:
+        return _ros_build_in_types[type_name]
+    return type_name
+
+
+def _get_ros_packages(mode):
+    """
+    same as the command line 'rosmsg packages'
+    :return: ROS messages as a list
+    """
+    return sorted([x for x in rosmsg.iterate_packages(rospkg.RosPack(), mode)])
+
+
+def _get_ros_msg(mode):
+    ret = []
+    if mode == rosmsg.MODE_MSG:
+        suffix = 'msg'
+    else:
+        suffix = 'srv'
+    ros_packages = _get_ros_packages(mode)
+    for (p, directory) in ros_packages:
+        for file_name in getattr(rosmsg, '_list_types')(directory, suffix, mode):
+            ret.append(p + '/' + file_name)
+    return ret
 
 
 def _nodeid_generator(idx):
     return ua.NodeId(namespaceidx=idx)
 
 
-def _create_args(msg_class, data_type):
-    """one extension object contains all info"""
-    if not len(getattr(msg_class, '__slots__')):
-        return []
-    msg_class_name = getattr(msg_class, '_type')
-    arg = ua.Argument()
-    arg.Name = msg_class_name
-    arg.DataType = data_type
-    arg.ValueRank = -1
-    arg.ArrayDimensions = []
-    arg.Description = ua.LocalizedText(msg_class_name)
-    return [arg]
+def _extract_ua_array_info(type_str):
+    is_array = False
+    if type_str.startswith('ListOf'):
+        type_str = type_str.split('ListOf', 1)[-1]
+        is_array = True
+
+    return type_str, is_array
+
+
+def _extract_ros_array_info(type_str):
+    """ROS only support 1 dimensional array"""
+    is_array = False
+    if '[' in type_str:
+        type_str = type_str.split('[', 1)[0]
+        is_array = True
+
+    return type_str, is_array
 
 
 def _to_ros_msg(ua_class, ros_msg):
     for attr in ua_class.ua_types:
-        base_type_str, is_array = _extract_ros_array_info(attr[1])
+        base_type_str, is_array = _extract_ua_array_info(attr[1])
         if base_type_str in _ua_basic_types:
             setattr(ros_msg, attr[0], getattr(ua_class, attr[0]))
         else:
@@ -91,29 +113,18 @@ def _to_ua_class(ros_msg, ua_class):
     return ua_class
 
 
-def _extract_ua_array_info(type_str):
-    is_array = False
-    if type_str.startswith('ListOf'):
-        type_str = type_str.split('ListOf', 1)[-1]
-        is_array = True
-
-    return type_str, is_array
-
-
-def _extract_ros_array_info(type_str):
-    """ROS only support 1 dimensional array"""
-    is_array = False
-    if '[' in type_str:
-        type_str = type_str.split('[', 1)[0]
-        is_array = True
-
-    return type_str, is_array
-
-
-def _lookup_type(type_name):
-    if type_name in _ros_build_in_types:
-        return _ros_build_in_types[type_name]
-    return type_name
+def _create_args(msg_class, data_type):
+    """one extension object contains all info"""
+    if not len(getattr(msg_class, '__slots__')):
+        return []
+    msg_class_name = getattr(msg_class, '_type')
+    arg = ua.Argument()
+    arg.Name = msg_class_name
+    arg.DataType = data_type
+    arg.ValueRank = -1
+    arg.ArrayDimensions = []
+    arg.Description = ua.LocalizedText(msg_class_name)
+    return [arg]
 
 
 class OpcUaROSMessage:
@@ -148,7 +159,7 @@ class OpcUaROSMessage:
             msg.add_field(variable_type, _lookup_type(base_type_str), is_array)
 
     def _create_messages(self):
-        messages = get_ros_messages()
+        messages = _get_ros_msg(rosmsg.MODE_MSG)
         for msg in messages:
             if msg not in self._created_struct_nodes:
                 self._recursively_create_message(msg)
@@ -162,7 +173,7 @@ class OpcUaROSMessage:
 
     def _create_services(self):
         """since srv can not embed another .srv, no recursion is needed"""
-        services = get_ros_services()
+        services = _get_ros_msg(rosmsg.MODE_SRV)
         for srv in services:
             service = roslib.message.get_service_class(srv)
             if not service:  # Broken packages
@@ -172,10 +183,12 @@ class OpcUaROSMessage:
 
     def create_ros_data_types(self):
         self._create_messages()
+        created_msgs = {key: value.data_type for key, value in self._created_struct_nodes.items()}
         self._create_services()
         self._dict_builder.set_dict_byte_string()
         data_types = {key: value.data_type for key, value in self._created_struct_nodes.items()}
-        return data_types
+        created_srvs = {key: value for key, value in data_types.items() if key not in created_msgs}
+        return data_types, created_msgs, created_srvs
 
 
 class OpcUaROSService:
@@ -197,7 +210,7 @@ class OpcUaROSService:
         output_arg = _create_args(self._ros_service_resp, out_dt_node_id)
 
         self._method = node_root.add_method(service_node_id, service_name, self._call_service, input_arg, output_arg)
-        rospy.loginfo('Created ROS Service with name: ' + service_name)
+        rospy.loginfo('Created ROS Service: ' + service_name)
 
     @uamethod
     def _call_service(self, _, *inputs):
@@ -213,209 +226,167 @@ class OpcUaROSService:
         except Exception as e:
             rospy.logerr('Error when calling service ' + self._service_name, e)
 
+    def get_node(self):
+        return self._method
+
     def delete_node(self):
         self._proxy.close()
         self._method.delete()
-        rospy.loginfo('Deleted ROS Service with name: ' + self._service_name)
+        rospy.loginfo('Deleted ROS Service: ' + self._service_name)
 
 
 class OpcUaROSTopic:
 
-    def __init__(self, topic_name):
+    def __init__(self, topic_name, status_root, pub_root, msg_dict, *node_id):
         self._topic_name = topic_name
         self._topic_class, _, _ = rostopic.get_topic_class(self._topic_name)
         self._msg_name = getattr(self._topic_class, '_type')
-
-
-class OpcUaROSTopicPub(OpcUaROSTopic):
-
-    def __init__(self, topic_name, node_root, msg_dict, *node_id):
-        OpcUaROSTopic.__init__(self, topic_name)
-        self._topic = node_root.add_property(node_id[0], self._topic_name, ua.Variant(None, ua.VariantType.Null),
-                                             datatype=msg_dict[self._msg_name])
-        rospy.loginfo('Created UA variable for ROS Publication under ROS topic: ' + topic_name)
-        self._handler = rospy.Subscriber(topic_name, self._topic_class, self._message_callback)
-
-    def _message_callback(self, message):
-        self._topic.set_value(_to_ua_class(message, get_ua_class(self._msg_name)()))
-
-    def delete_node(self):
-        self._handler.unregister()
-        self._topic.delete()
-        rospy.loginfo('Deleted ROS Topic Publication under ROS topic: ' + self._topic_name)
-
-
-class OpcUaROSTopicSub(OpcUaROSTopic):
-
-    def __init__(self, topic_name, node_root, msg_dict, *node_id):
-        OpcUaROSTopic.__init__(self, topic_name)
-        self._topic = node_root.add_variable(node_id[0], self._topic_name, ua.Variant(None, ua.VariantType.Null),
-                                             datatype=msg_dict[self._msg_name])
-        self._pub_handler = rospy.Publisher(self._topic_name, self._topic_class, queue_size=1)
+        self._topic = status_root.add_property(node_id[0], self._topic_name, ua.Variant(None, ua.VariantType.Null),
+                                               datatype=msg_dict[self._msg_name])
+        self._pub_handler = rospy.Publisher(self._topic_name, self._topic_class, queue_size=10)
+        self._sub_handler = rospy.Subscriber(self._topic_name, self._topic_class, self._message_callback)
 
         input_arg = _create_args(self._topic_class, msg_dict[self._msg_name])
-        self._method = self._topic.add_method(node_id[1], 'publish', self._call_publish, input_arg, [])
-        rospy.loginfo('Created UA variable for ROS Subscription under ROS topic: ' + topic_name)
-        self._sub_handler = rospy.Subscriber(topic_name, self._topic_class, self._message_callback)
+        self._method = pub_root.add_method(node_id[1], self._topic_name, self._call_publish, input_arg, [])
+        rospy.loginfo('Created ROS Topic: ' + self._topic_name)
 
     def _message_callback(self, message):
         self._topic.set_value(_to_ua_class(message, get_ua_class(self._msg_name)()))
 
     @uamethod
     def _call_publish(self, _, *inputs):
-        rospy.loginfo('Publishing data under ROS topic: ' + self._topic_name)
+        rospy.loginfo('Publishing data under ROS Topic: ' + self._topic_name)
         try:
             ua_class = inputs[0] if inputs else get_ua_class(self._topic_class)()
             self._pub_handler.publish(_to_ros_msg(ua_class, self._topic_class()))
             rospy.loginfo('Topic publishing succeeded!')
-            return
         except Exception as e:
             rospy.logerr('Error when publishing topic ' + self._topic, e)
 
+    def get_status_node(self):
+        return self._topic
+
+    def get_publish_node(self):
+        return self._method
+
     def delete_node(self):
-        self._method.delete()
-        self._pub_handler.unregister()
         self._sub_handler.unregister()
+        self._method.delete()
         self._topic.delete()
-        rospy.loginfo('Deleted ROS Topic Subscription under ROS topic: ' + self._topic_name)
+        self._pub_handler.unregister()
+        rospy.loginfo('Deleted ROS Topic: ' + self._topic_name)
 
 
-class OpcUaROSAction:
-
-    def __init__(self, idx, action_name, node_root, msg_dict, topics):
-        self._idx = idx
-        self._action_name = action_name
-        self._root = node_root.add_folder(_nodeid_generator(self._idx), 'Action')
-        self._dict = msg_dict
-
-        self._goal = None
-        self._goal_class = None
-        self._result_class, self._result = self._get_action_class(topics['result'], _nodeid_generator(self._idx))
-        self._feedback_class, self._feedback = self._get_action_class(topics['feedback'], _nodeid_generator(self._idx))
-        self._status = self._root.add_property(_nodeid_generator(self._idx), topics['status'],
-                                               ua.Variant('', ua.VariantType.String))
-
-        rospy.loginfo('Created ROS Action with name: ' + self._action_name)
-
-    def _get_action_class(self, name, node_id):
-        action_class, _, _ = rostopic.get_topic_class(name)
-        class_name = getattr(action_class, '_type')
-        ua_node = self._root.add_property(node_id, name, ua.Variant(None, ua.VariantType.Null),
-                                          datatype=self._dict[class_name])
-        return action_class, ua_node
-
-    def _goal_callback(self, message):
-        ua_goal_obj = get_ua_class(getattr(self._goal_class, '_type'))()
-        self._goal.set_value(_to_ua_class(message, ua_goal_obj))
-
-    def delete_node(self):
-        self._goal.delete()
-        self._status.delete()
-        self._result.delete()
-        self._feedback.delete()
-        rospy.loginfo('Deleted ROS Action with name: ' + self._action_name)
+def _is_action(name_list, feature_list):
+    # at least two features should match
+    feature_counter = 0
+    for name in name_list:
+        if name.split('/')[-1] in feature_list:
+            feature_counter = feature_counter + 1
+    if feature_counter >= 2:
+        return True
+    return False
 
 
-class OpcUaROSActionClient(OpcUaROSAction):
-
-    def __init__(self, idx, action_name, node_root, msg_dict, topics):
-        OpcUaROSAction.__init__(self, idx, action_name, node_root, msg_dict, topics)
-        self._goal_class, self._goal = self._get_action_class(topics['goal'], _nodeid_generator(self._idx))
-        self._goal_handler = rospy.Subscriber(topics['goal'], self._goal_class, self._goal_callback)
-        self._result_handler = rospy.Subscriber(topics['result'], self._result_class, self._result_callback)
-        self._feedback_handler = rospy.Subscriber(topics['feedback'], self._feedback_class, self._feedback_callback)
-        # FIXME: status in action client seem to be always empty, if try to acquire with standard msg class.
-        # status_class, _, _ = rostopic.get_topic_class(topics['status'])
-        # self._status_handler = rospy.Subscriber(topics['status'], status_class, self._status_callback)
-
-    def _result_callback(self, message):
-        ua_result_obj = get_ua_class(getattr(self._result_class, '_type'))()
-        self._result.set_value(_to_ua_class(message, ua_result_obj))
-
-    def _feedback_callback(self, message):
-        ua_feedback_obj = get_ua_class(getattr(self._feedback_class, '_type'))()
-        self._feedback.set_value(_to_ua_class(message, ua_feedback_obj))
-
-    # def _status_callback(self, message):
-    #     self._status.set_value(ua.Variant(_ros_goal_status[message.status], ua.VariantType.String))
-
-    def delete_node(self):
-        self._goal_handler.unregister()
-        self._result_handler.unregister()
-        self._feedback_handler.unregister()
-        # self._status_handler.unregister()
-        OpcUaROSAction.delete_node(self)
+def _add_action(pub_list, sub_list):
+    name_list = pub_list + sub_list
+    action_list = {'is_action_server': True if _is_action(sub_list, ['goal', 'cancel']) else False,
+                   'topics': [n for n in name_list if n.split('/')[-1] in _action_feature_list]}
+    return action_list
 
 
-class OpcUaROSActionServer(OpcUaROSAction):
+def _del_action(name_list):
+    return [n for n in name_list if n.split('/')[-1] not in _action_feature_list]
 
-    def __init__(self, idx, action_name, node_root, msg_dict, topics):
-        OpcUaROSAction.__init__(self, idx, action_name, node_root, msg_dict, topics)
-        self._goal_class, _, _ = rostopic.get_topic_class(topics['goal'])
-        goal_class_name = getattr(self._goal_class, '_type')
-        self._goal = self._root.add_variable(_nodeid_generator(self._idx), topics['goal'],
-                                             ua.Variant(None, ua.VariantType.Null),
-                                             datatype=self._dict[goal_class_name])
-        action_class_name = goal_class_name.replace("Goal", "")
-        self._action_class = roslib.message.get_message_class(action_class_name)
-        try:
-            self.client = actionlib.SimpleActionClient(self._action_name, self._action_class)
-        except actionlib.ActionException as e:
-            rospy.logerr("Error when creating ActionClient for action " + self._action_name, e)
 
-        goal_data_id = self._dict[getattr(self._goal_class, '_type')]
-        self._send_method = self._goal.add_method(_nodeid_generator(self._idx), 'send goal', self._send_goal,
-                                                  _create_args(self._goal_class, goal_data_id), [])
+class BasicROSServer:
 
-        self._cancel = self._root.add_method(_nodeid_generator(self._idx), topics['cancel'], self._cancel_goal, [], [])
-        self._goal_handler = rospy.Subscriber(topics['goal'], self._goal_class, self._goal_callback)
+    def __init__(self):
+        self._server = Server()
 
-    @uamethod
-    def _send_goal(self, _, *inputs):
-        rospy.loginfo('Calling method %s under ROS node: %s' % ('"send goal"', self._root.get_display_name().Text))
-        try:
-            ua_class = inputs[0] if inputs else get_ua_class(self._goal_class)()
-            goal_msg = _to_ros_msg(ua_class, self._goal_class())
-            rospy.loginfo("Created Message Instances for goal-send: " + goal_msg)
-            self.client.send_goal(goal_msg, done_cb=self._update_result, feedback_cb=self._update_feedback,
-                                  active_cb=self._update_state)
-        except Exception as e:
-            rospy.logerr("Error occurred during goal sending for Action " + self._action_name, e)
+        self._server.set_endpoint('opc.tcp://0.0.0.0:21554/RosServer')
+        self._server.set_server_name('ROS UA Server')
+        self._idx_name = 'http://ros.org/rosopcua'
+        self._idx = self._server.register_namespace(self._idx_name)
+        self.ros_node_name = 'rosopcua'
+        self._server_started = False
 
-    @uamethod
-    def _cancel_goal(self, *_):
-        rospy.loginfo('Canceling goal under ROS node name: %s' + self._action_name)
-        try:
-            self.client.cancel_all_goals()
-            self._update_state()
-        except Exception as e:
-            rospy.logerr("Error when cancelling a goal for " + self._action_name, e)
+        self.namespace_ros = rospy.get_param('/rosopcua/namespace')
+        self.auto_refresh = rospy.get_param('/rosopcua/automatic_refresh')
+        self.refresh_cycle_time = rospy.get_param('/rosopcua/refresh_cycle_time')
+        self.import_xml_msgs = rospy.get_param('/rosopcua/import_xml_msgs')
+        self.g_ns = rosgraph.names.make_global_ns(self.namespace_ros)
 
-    def _update_result(self, state, result):
-        self._status.set_value(_ros_goal_status[state])
-        self._result.set_value(_to_ua_class(result, self._result_class()))
+        self._exclude_list = ['rosout', '/rosout', self.ros_node_name, '/' + self.ros_node_name]
 
-    def _update_state(self):
-        self._status.set_value(_ros_goal_status[self.client.get_state()])
+        self._type_list = None
+        self._ros_msgs = None
+        self._ros_srvs = None
 
-    def _update_feedback(self, feedback):
-        self._feedback.set_value(_to_ua_class(feedback, self._feedback_class()))
+    def __enter__(self):
+        rospy.init_node(self.ros_node_name, log_level=rospy.INFO)
+        return self
 
-    def _unregister_client(self):
-        """
-        very bad style, but simple_action_client does not provide such a method,
-        compromise to the normal functionality
-        """
-        self.client.action_client.pub_goal.unregister()
-        self.client.action_client.pub_cancel.unregister()
-        self.client.action_client.status_sub.unregister()
-        self.client.action_client.result_sub.unregister()
-        self.client.action_client.feedback_sub.unregister()
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._server_started:
+            self._server.stop()
+        quit()
 
-    def delete_node(self):
-        self.client.cancel_all_goals()
-        self._goal_handler.unregister()
-        self._unregister_client()
-        self._send_method.delete()
-        self._cancel.delete()
-        OpcUaROSAction.delete_node(self)
+    def _nodeid_generator(self):
+        return _nodeid_generator(self._idx)
+
+    def _start_server(self):
+        self._server.start()
+        self._server_started = True
+        rospy.loginfo(' ----- Server started! ------ ')
+
+    def _extract_info(self, info):
+        return sorted([t for t, l in info if (t == self.namespace_ros or t.startswith(self.g_ns))
+                       and t not in self._exclude_list and not (len(l) == 1 and l[0] in self._exclude_list)])
+
+    def _extract_node_info(self, info, node):
+        return sorted([t for t, l in info if t not in self._exclude_list
+                       and (t == self.namespace_ros or t.startswith(self.g_ns))
+                       and node in l and not (len(l) == 1 and l[0] in self._exclude_list)])
+
+    def _get_ros_info(self):
+        master = rosgraph.Master(self.ros_node_name)
+        state = master.getSystemState()
+        params = {key: value for key, value in master.getParam(self.namespace_ros).items()
+                  if key not in self._exclude_list}
+
+        nodes = []
+        for s in state:
+            for t, l in s:
+                nodes.extend(l)
+        nodes = [node for node in list(set(nodes)) if node.split('/')[-1] not in self._exclude_list]
+
+        topics = self._extract_info(state[0])
+        topics += self._extract_info(state[1])
+        services = self._extract_info(state[2])
+
+        nodes_info_dict = {}
+        for node in nodes:
+            node_info = {'pubs': self._extract_node_info(state[0], node),
+                         'subs': self._extract_node_info(state[1], node),
+                         'srvs': self._extract_node_info(state[2], node),
+                         'acts': {}}
+            if _is_action(node_info['pubs'], _action_feature_list):
+                node_info['acts'] = _add_action(node_info['pubs'], node_info['subs'])
+                node_info['pubs'] = _del_action(node_info['pubs'])
+                node_info['subs'] = _del_action(node_info['subs'])
+            nodes_info_dict[node] = node_info
+        return nodes_info_dict, services, list(set(topics)), params
+
+    def import_messages(self):
+        rospy.loginfo(' ----- start importing node message to xml ------ ')
+        nodes = self._server.import_xml(message_export_path)
+        rospy.loginfo(' ----- %s nodes are imported ------ ' % len(nodes))
+        type_dict = {self._server.get_node(node).get_display_name().Text: node for node in nodes}
+        return type_dict
+
+    def load_messages(self):
+        rospy.loginfo(' ----- Creating messages ------ ')
+        ros_type_creator = OpcUaROSMessage(self._server, self._idx, self._idx_name)
+        self._type_list, self._ros_msgs, self._ros_srvs = ros_type_creator.create_ros_data_types()
+        rospy.loginfo(' ----- %s messages created------ ' % str(len(self._type_list)))
