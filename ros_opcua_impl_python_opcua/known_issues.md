@@ -1,10 +1,10 @@
 # Known Issues or problems
 
 ## Actions
-* Wrong Argument Parsing, as Int32 type arguments are wrongly parsed to Int16 ua.Arguments()
+- [ ] Wrong Argument Parsing, as Int32 type arguments are wrongly parsed to Int16 ua.Arguments()
 (See BlinkyAction, PoliceAction on SR2 Robot in Lab for example)
 
-* Move_Base_Simple action has special case as to fix Errors that were thrown, possibly it is a malformed Action Definition
+- [ ] Move_Base_Simple action has special case as to fix Errors that were thrown, possibly it is a malformed Action Definition
 ```python
 if 'move_base_simple' in self.name:
         self.goal_instance = self.goal_class()
@@ -12,10 +12,10 @@ if 'move_base_simple' in self.name:
         self.goal_instance = self.goal_class().goal
 ```
 
-* Actions are seen as Actions when */goal*, */feedback*, */result* or */status* is in the topic name, better heuristic possibly needed
+- [ ] Actions are seen as Actions when */goal*, */feedback*, */result* or */status* is in the topic name, better heuristic possibly needed
     + No heuristics found in action management of ROS, ideal in terminal were `rosaction list` analog to `rostopic list`.
 
-* We ignore "header" in the goal call message instance to create our Arguments (and back the other way). Possible mistake See:
+- [ ] We ignore "header" in the goal call message instance to create our Arguments (and back the other way). Possible mistake See:
 ```python
 while cur_slot == 'header':
                 rospy.logdebug("ignoring header")
@@ -26,13 +26,13 @@ while cur_slot == 'header':
 
 ## Topics:
 
-* Better Idea for publishing OPC UA Data ?
+- [ ] Better Idea for publishing OPC UA Data ?
     + Use Events to trigger while get a changed data. The client can subscribe the event and get informed.
     + Solved.
 
 ## Services
 
-* Methods return value Strings are not correctly transfered to OPC UA somehow (maybe an UAExpert issue, as they can be printed in the call method onto the console correctly)
+- [ ] Methods return value Strings are not correctly transfered to OPC UA somehow (maybe an UAExpert issue, as they can be printed in the call method onto the console correctly)
     + Try to write a small ua client, debugging there.
     + Solved.
 
@@ -41,9 +41,9 @@ while cur_slot == 'header':
 
 ### High level python OPC UA does not support meta-modelling
 
-The HasTypeDefinition reference is capsuled to BasicDataVariableType for Variable, therefore the created VariableType can not be used for further modelling.
+- [ ] The HasTypeDefinition reference is capsuled to BasicDataVariableType for Variable, therefore the created VariableType can not be used for further modelling.
 
-Use the low level and middle level functions in python OPC UA to create functions for meta-modelling of ROS.
+- [ ] Use the low level and middle level functions in python OPC UA to create functions for meta-modelling of ROS.
 
 Solved.
 
@@ -53,11 +53,11 @@ Solved.
 
 Possible information:
 
-+ ROS message
+- [ ] ROS message
 ROS message can be easily retrieved with the ros build in tools, and will be modelled as variable types
-+ ROS service
+- [ ] ROS service
 ROS services can be retrieved with tools, the structure is similar to ROS message, can be modelled as variable types, ROS service can be also modelled as object type, if a ROS node contains a specific service, an object out of this object type can be instantiated.
-+ ROS topic & ROS action
+- [ ] ROS topic & ROS action
     + Seem that no possible to know what kind of topics a node will publish and subscribe before it runs.
     + But topics and actions publish or subscribe messages defined in ROS messages.
 
@@ -65,14 +65,14 @@ Solved.
 
 ### Dynamic modelling
 
-+ ROS node
+- [ ] ROS node
 ROS node can be retrieved from ROS master, which indicates the services and topics. Therefore the services and topics can be organized under ROS nodes, namely ROS node will be initiated in UA server as an object, its services will be provided as methods of the object and its interesting topics will be events or event notifier.
 
 Solved.
 
 ## Method call
 
-Problem: If python opcua supports method call with customized variable types as arguments (The ROS messages we imported).
+- [ ] Problem: If python opcua supports method call with customized variable types as arguments (The ROS messages we imported).
 
 Related discussion on GitHub [issue 297](https://github.com/FreeOpcUa/python-opcua/issues/297).
 
@@ -111,9 +111,7 @@ Solved with new patches released for the xml export function.
 
 ## Extension object
 
-also called customized structure
-
-create extension objects on the fly,
+- [ ] also called customized structure, create extension objects on the fly,
 
 use load_type_definitions when using extension objects in client side.
 
@@ -123,7 +121,7 @@ Solved.
 
 ## Import xml instead of directly generate messages
 
-Now the created extension objects can not be displayed correctly in UAExpert by importing xml, the reason is unknown, it seems that everything in direct generation and import are the same...
+- [ ] Now the created extension objects can not be displayed correctly in UAExpert by importing xml, the reason is unknown, it seems that everything in direct generation and import are the same...
 
 Besides, for a test case with 395 ros messages:
 
@@ -134,21 +132,21 @@ A ros parameter `import_xml_msgs` is imported to support both xml import and cre
 
 ## Actionlib uses unique goal ID to encrypt its topic publication
 
-1. Actionlib uses unique goal ID to encrypt its topic publication. Problem of displaying the status of action client, if so, see [here](https://answers.ros.org/question/265723/actionlib-client-how-to-get-goal-id/)
+1. - [ ] Actionlib uses unique goal ID to encrypt its topic publication. Problem of displaying the status of action client, if so, see [here](https://answers.ros.org/question/265723/actionlib-client-how-to-get-goal-id/)
 
-2. Action client, how to model it?
+2. - [ ] Action client, how to model it?
     + Now only */goal*, */feedback*, */result* or */status* as property are tracked, and it seems that the */status* subscribed with standard status class `actionlib_msgs/GoalStatusArray` gives out empty result, to get the status, only by making a client in action and call method `client.get_state()`.
     + */feedback* and  */result* were modelled without publishing method, try to mock the action client does not make too much sense here.
     + For the */feedback*, */result*, there seems to be no value updates while the client exists, problem in 1?
 
-3. Action server bug
+3. - [ ] Action server bug
     + At lease in action server `turtle_actionlib shape_server`, after shut down there is a leakage in unregistering the created topics (maybe, at least I did not see any de-registration in the source code of turtle_actionlib), there is always a warning `[WARN] [1534594441.388838]: Could not process inbound connection: [/rosopcua] is not a publisher of [/turtle1/pose]. Topics are [['/turtle1/cmd_vel', 'geometry_msgs/Twist'], ['/rosout', 'rosgraph_msgs/Log']]{'message_definition': 'float32 x\nfloat32 y\nfloat32 theta\n\nfloat32 linear_velocity\nfloat32 angular_velocity', 'callerid': '/rosopcua', 'tcp_nodelay': '0', 'md5sum': '863b248d5016ca62ea2e895ae5265cf9', 'topic': '/turtle1/pose', 'type': 'turtlesim/Pose'}`
     + In the rosnode, it seems that after the server started, it created a subscription to our ua_ros node `\rosopcua` , the reason is unknown, since it is not explict created by the code with `rospy.Subscriber()`, we can do nothing to remove it?
     + Possible solution? 
     
 ## ROS Topic deleting problem
 
-Error message: `[WARN] [1535063519.464253]: Inbound TCP/IP connection failed: connection from sender terminated before handshake header received. 0 bytes were received. Please check sender for additional details.`
+- [ ] Error message: `[WARN] [1535063519.464253]: Inbound TCP/IP connection failed: connection from sender terminated before handshake header received. 0 bytes were received. Please check sender for additional details.`
 
 Problem lies on ROS side, please check [here](https://github.com/Microsoft/WSL/issues/1391#issuecomment-300076193).
 
@@ -158,4 +156,8 @@ This problem happens sometimes, not always.
 
 ## Bug in UaExpert in displaying a list of objects
 
-The object value display window will be covered by the object list view. 
+- [ ] The object value display window will be covered by the object list view. Happens only on Ubuntu Unity, not on KDE
+
+## Wait for the new release of python-opcua
+
+- [ ] Now the current release does not include our type_dictionary_builder.py, wait for new release.

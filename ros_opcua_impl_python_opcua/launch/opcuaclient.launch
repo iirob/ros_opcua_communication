@@ -1,0 +1,3 @@
+<launch>
+    <node name="opcuaclient" pkg="ros_opcua_impl_python_opcua" type="ros_client.py" output="screen" />
+</launch>

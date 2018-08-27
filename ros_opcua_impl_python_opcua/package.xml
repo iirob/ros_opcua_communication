@@ -14,6 +14,7 @@
 
   <author email="denis.stogl@kit.edu">Denis Štogl</author>
   <author email="ukdrq@student.kit.edu">Daniel Draper</author>
+  <author email="peiren.yang@student.kit.edu">Peiren Yang</author>
 
   <buildtool_depend>catkin</buildtool_depend>
   
