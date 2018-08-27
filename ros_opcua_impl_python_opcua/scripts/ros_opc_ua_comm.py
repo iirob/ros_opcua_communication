@@ -27,6 +27,23 @@ _ros_build_in_types = {'bool': ua.VariantType.Boolean,
 _ua_basic_types = [item.name for item in _ros_build_in_types.values()]
 
 
+def expand_ua_class(obj, level=0):
+    """expand ua class to plain text"""
+    if not obj:
+        return None
+    buff = '\n{}ua_object, type: {}'.format(level*'\t', obj.__class__.__name__)
+    for var, data_type in obj.ua_types:
+        if data_type in _ua_basic_types:
+            buff += '\n\t{}:{}'.format(level*'\t' + var, getattr(obj, var))
+        else:
+            if isinstance(getattr(obj, var), list):
+                for member in getattr(obj, var):
+                    buff += expand_ua_class(getattr(member, var), level=level + 1)
+            else:
+                buff += expand_ua_class(getattr(obj, var), level=level + 1)
+    return buff
+
+
 def _lookup_type(type_name):
     if type_name in _ros_build_in_types:
         return _ros_build_in_types[type_name]

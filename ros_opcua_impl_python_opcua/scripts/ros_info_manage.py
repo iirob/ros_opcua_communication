@@ -224,12 +224,14 @@ def _del_action(name_list):
 
 class ROSInfoAgent:
 
-    def __init__(self, node_name, ros_namespace):
-        self._ros_node_name = node_name
-        self._exclude_list = ('rosout', '/rosout', self._ros_node_name, '/' + self._ros_node_name)
+    def __init__(self, ros_namespace):
+        # keep the name update with the basic ros server and client
+        server_name = 'rosopcua'
+        client_name = 'opcuaclient'
+        self._exclude_list = ('rosout', '/rosout', server_name, '/' + server_name, client_name, '/' + client_name)
         self._namespace = ros_namespace
         self._ns = rosgraph.names.make_global_ns(self._namespace)
-        self._master = rosgraph.Master(self._ros_node_name)
+        self._master = rosgraph.Master(server_name)
 
     def _extract_info(self, info):
         return sorted([t for t, l in info if (t == self._namespace or t.startswith(self._ns))
