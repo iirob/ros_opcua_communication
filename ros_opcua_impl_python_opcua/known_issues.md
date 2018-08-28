@@ -119,8 +119,8 @@ Extension object is defined actually in data type, data type must have encoding,
 
 3. - [x] Action server bug
     + At lease in action server `turtle_actionlib shape_server`, after shut down there is a leakage in unregistering the created topics (maybe, at least I did not see any de-registration in the source code of turtle_actionlib), there is always a warning `[WARN] [1534594441.388838]: Could not process inbound connection: [/rosopcua] is not a publisher of [/turtle1/pose]. Topics are [['/turtle1/cmd_vel', 'geometry_msgs/Twist'], ['/rosout', 'rosgraph_msgs/Log']]{'message_definition': 'float32 x\nfloat32 y\nfloat32 theta\n\nfloat32 linear_velocity\nfloat32 angular_velocity', 'callerid': '/rosopcua', 'tcp_nodelay': '0', 'md5sum': '863b248d5016ca62ea2e895ae5265cf9', 'topic': '/turtle1/pose', 'type': 'turtlesim/Pose'}`
-    + In the rosnode, it seems that after the server started, it created a subscription to our ua_ros node `\rosopcua` , the reason is unknown, since it is not explict created by the code with `rospy.Subscriber()`, we can do nothing to remove it?
-    + Possible solution? 
+    + In the rosnode, it seems that after the server started, it created a subscription to our ua_ros node `\rosopcua` .
+    + Possible solution? Solved with virtual nodes.
 
 ## Import xml instead of directly generate messages
 

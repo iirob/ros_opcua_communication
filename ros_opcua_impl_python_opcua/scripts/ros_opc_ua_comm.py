@@ -39,7 +39,7 @@ def expand_ua_class(obj, level=0):
             if isinstance(getattr(obj, var), list):
                 for member in getattr(obj, var):
                     if hasattr(member, 'ua_types'):
-                        buff += expand_ua_class(getattr(member, var), level=level + 1)
+                        buff += expand_ua_class(member, level=level + 1)
                     else:
                         buff += '\n\t{}:{}'.format(level * '\t' + type(member).__name__, member)
             else:

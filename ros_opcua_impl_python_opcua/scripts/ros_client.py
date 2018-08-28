@@ -54,6 +54,7 @@ if __name__ == '__main__':
         time.sleep(1)
         rospy.loginfo(' ----- rosnode details------ ')
         client.show_ros_nodes()
+        rospy.loginfo(' ----- static information end------ ')
 
         # Call Methods
         # time.sleep(1)
