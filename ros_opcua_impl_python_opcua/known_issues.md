@@ -110,7 +110,7 @@ Extension object is defined actually in data type, data type must have encoding,
 
 ## Import xml instead of directly generate messages
 
-- [ ] Now the created extension objects can not be displayed correctly in UAExpert by importing xml, the reason is unknown, it seems that everything in direct generation and import are the same...
+- [ ] Now the created extension objects can not be displayed correctly in UAExpert by importing xml, the import function seem to have mixed OPC UA dictionary and data type nodes, the created data became one specific node.
 
 Besides, for a test case with 395 ros messages:
 

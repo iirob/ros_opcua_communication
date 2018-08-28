@@ -22,7 +22,7 @@ class ROSServer(ROSBasicServer):
         # FIXME: 1. bugs after xml import, extension object can not be used
         # 2. should compare in system to get correct msgs and srvs after xml loaded.
         if self._import_xml_msgs:
-            self._type_list = self.import_messages()
+            self._type_dict = self.import_messages()
         else:
             self.load_messages()
 
