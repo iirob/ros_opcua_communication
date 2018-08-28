@@ -62,6 +62,24 @@ class ROSBasicServer:
         rospy.loginfo(' ----- {} messages created------ '.format(str(len(self._type_dict))))
 
 
+def _traverse_param(param_node, level=0, show_value=False):
+    if param_node.get_type_definition().Identifier == ua.ObjectIds.FolderType:
+        buff = '\n{}{}'.format(level * '\t', param_node.get_display_name().Text)
+        for node in param_node.get_children(refs=ua.ObjectIds.Organizes):
+            buff += _traverse_param(node, level + 1, show_value)
+        for node in param_node.get_children(refs=ua.ObjectIds.HasProperty):
+            # No extension object in parameters
+            buff += '\n{}{}'.format((level + 1)*'\t', node.get_display_name().Text)
+            if show_value:
+                buff += ': {}'.format(node.get_value())
+        return buff
+    else:
+        buff = '{}{}'.format(level * '\t', param_node.get_display_name().Text)
+    if show_value:
+        buff += ': {}'.format(param_node.get_value())
+    return buff
+
+
 class ROSBasicClient:
 
     def __init__(self):
@@ -177,9 +195,8 @@ class ROSBasicClient:
 
     def list_params(self):
         self._refresh_params()
-        # FIXME: params in a dict can not be listed out, recursive traverse needed.
         for param in self._params:
-            rospy.loginfo(param)
+            rospy.loginfo(_traverse_param(self._params[param]))
 
     def show_param(self, param_name):
         if not self._params:
@@ -189,12 +206,7 @@ class ROSBasicClient:
             if param_name not in self._params:
                 raise Exception('Parameter {} does not exist in server side!'.format(param_name))
         try:
-            # FIXME: recursively show params
-            if self._params[param_name].get_type_definition().Identifier == ua.ObjectIds.FolderType:
-                param_value = 'node params'
-            else:
-                param_value = self._params[param_name].get_value()
-            rospy.loginfo('{}:{}'.format(param_name, param_value))
+            rospy.loginfo(_traverse_param(self._params[param_name], show_value=True))
         except UaError as e:
             rospy.logerr(e.message)
             del self._params[param_name]
