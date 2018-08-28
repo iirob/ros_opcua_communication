@@ -10,10 +10,10 @@ class SubHandler(object):
 
     @staticmethod
     def datachange_notification(node, val, _):
-        # seems there are bugs for the ua notifier to work with extension objects
         if not val:
             rospy.loginfo('Empty extension object received in node' + node.nodeid)
-        rospy.loginfo(ROSBasicClient.expand_value(val))
+        else:
+            rospy.loginfo(ROSBasicClient.expand_value(val))
 
 
 class ROSClient(ROSBasicClient):
@@ -28,33 +28,34 @@ class ROSClient(ROSBasicClient):
 
 if __name__ == '__main__':
     with ROSClient() as client:
-        # rospy.loginfo(' ----- rosmsg ------ ')
-        # client.list_msgs()
-        # time.sleep(1)
-        # rospy.loginfo(' ----- rossrv ------ ')
-        # client.list_srvs()
-        # time.sleep(1)
-        # rospy.loginfo(' ----- rosservice ------ ')
-        # client.list_services()
-        # time.sleep(1)
-        # rospy.loginfo(' ----- rostopic ------ ')
-        # client.list_topics()
-        # time.sleep(1)
-        # rospy.loginfo(' ----- rosnode ------ ')
-        # client.list_ros_nodes()
+        rospy.loginfo(' ----- rosmsg ------ ')
+        client.list_msgs()
+        time.sleep(1)
+        rospy.loginfo(' ----- rossrv ------ ')
+        client.list_srvs()
+        time.sleep(1)
+        rospy.loginfo(' ----- rosservice ------ ')
+        client.list_services()
+        time.sleep(1)
+        rospy.loginfo(' ----- rostopic ------ ')
+        client.list_topics()
+        time.sleep(1)
+        rospy.loginfo(' ----- rosnode ------ ')
+        client.list_ros_nodes()
         time.sleep(1)
         rospy.loginfo(' ----- rosparam ------ ')
         client.list_params()
-        # time.sleep(1)
-        # rospy.loginfo(' ----- rostopic values ------ ')
-        # client.show_topics()
+        time.sleep(1)
+        rospy.loginfo(' ----- rostopic values ------ ')
+        client.show_topics()
         time.sleep(1)
         rospy.loginfo(' ----- rosparam values ------ ')
         client.show_params()
-        # time.sleep(1)
-        # rospy.loginfo(' ----- rosnode details------ ')
-        # client.show_ros_nodes()
-        #
+        time.sleep(1)
+        rospy.loginfo(' ----- rosnode details------ ')
+        client.show_ros_nodes()
+
+        # Call Methods
         # time.sleep(1)
         # # Test case for turtlesim
         # obj = get_ua_class('turtlesim/TeleportRelativeRequest')()
@@ -68,6 +69,6 @@ if __name__ == '__main__':
         # client.publish_topic('/turtle1/cmd_vel', obj)
 
         # subscribe to topic publications
-        # time.sleep(1)
-        # client.subscribe_topics()
+        time.sleep(1)
+        client.subscribe_topics()
         rospy.spin()

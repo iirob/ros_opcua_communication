@@ -228,25 +228,42 @@ class ROSBasicClient:
             self._refresh_nodes()
             if node_name not in self._nodes:
                 raise Exception('Node {} does not exist in server side!'.format(node_name))
+
+        rospy.loginfo('------ rosnode {} ------'.format(node_name))
         try:
-            rospy.loginfo('------ rosnode {} ------'.format(node_name))
+            pub_node = self._nodes[node_name].get_child('Publications')
             rospy.loginfo('\tPublications:')
-            pubs = self._nodes[node_name].get_child('Publications').get_children(refs=ua.ObjectIds.Organizes)
+            pubs = pub_node.get_children(refs=ua.ObjectIds.Organizes)
             for pub in pubs:
-                rospy.loginfo('\t\t{}:{}'.format(pub.get_display_name().Text, self.expand_value(pub.get_value())))
+                rospy.loginfo('\t\t{}'.format(pub.get_display_name().Text))
+        except UaError:
+            pass
+        try:
+            sub_node = self._nodes[node_name].get_child('Subscriptions')
             rospy.loginfo('\tSubscriptions:')
-            subs = self._nodes[node_name].get_child('Subscriptions').get_children(refs=ua.ObjectIds.Organizes)
+            subs = sub_node.get_children(refs=ua.ObjectIds.Organizes)
             for sub in subs:
                 sub_name = sub.get_display_name().Text
                 if sub_name != 'topic publish':
                     rospy.loginfo('\t\t{}'.format(sub_name))
+        except UaError:
+            pass
+        try:
+            srv_node = self._nodes[node_name].get_child('Services')
             rospy.loginfo('\tServices:')
-            srvs = self._nodes[node_name].get_child('Services').get_children(refs=ua.ObjectIds.Organizes)
+            srvs = srv_node.get_children(refs=ua.ObjectIds.Organizes)
             for srv in srvs:
                 rospy.loginfo('\t\t{}'.format(srv.get_display_name().Text))
-        except UaError as e:
-            rospy.logerr(e.message)
-            del self._nodes[node_name]
+        except UaError:
+            pass
+        try:
+            act_node = self._nodes[node_name].get_child('Action')
+            rospy.loginfo('\tAction:')
+            acts = act_node.get_children(refs=ua.ObjectIds.Organizes)
+            for act in acts:
+                rospy.loginfo('\t\t{}'.format(act.get_display_name().Text))
+        except UaError:
+            pass
 
     def show_ros_nodes(self):
         if not self._nodes:
