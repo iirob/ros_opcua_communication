@@ -158,45 +158,62 @@ class ROSNodeManager:
             self._nodes_previous = current_nodes
 
 
+class SubHandler:
+
+    def __init__(self, name, init_val):
+        self.old_val = init_val
+        self._name = name
+
+    def datachange_notification(self, *value):
+        val = value[1]
+        if val != self.old_val:
+            rospy.set_param(self._name, val)
+            rospy.loginfo('ROS Parameter {} set to {}'.format(self._name, val))
+            self.old_val = val
+
+
 class ROSParamManager:
 
-    def __init__(self, idx, node_root):
+    def __init__(self, idx, node_root, writable=False, server=None):
+        self._server = server
         self._idx = idx
         self._root = node_root.add_folder(_nodeid_generator(self._idx), 'rosparam')
 
         self._ua_nodes = {}
+        self._sub_handler = {}
         self._previous = {}
+        self._writable = writable
 
-    def _create_param(self, param_name, param_value, param_folder, ua_node_buffer):
-        if isinstance(param_value, dict):
-            param_folder = param_folder.add_folder(_nodeid_generator(self._idx), param_name)
-            ua_node_buffer.append(param_folder)
-            for p, v in param_value.items():
-                self._create_param(p, v, param_folder, ua_node_buffer)
-        else:
-            ua_node_buffer.append(param_folder.add_property(_nodeid_generator(self._idx), param_name, param_value))
-            rospy.loginfo('Created ROS Parameter: ' + param_name)
+    def _create_param(self, param_name, param_value):
+        new_param = self._root.add_property(_nodeid_generator(self._idx), param_name, param_value)
+        if self._writable:
+            new_param.set_writable()
+            sub = self._server.create_subscription(500, SubHandler(param_name, param_value))
+            sub.subscribe_data_change(new_param)
+            self._sub_handler[param_name] = sub
+        self._ua_nodes[param_name] = new_param
+        rospy.loginfo('Created ROS Parameter: ' + param_name)
 
     def _delete_param(self, param_name):
-        """
-        Maybe this method will never be called without manual intervention.
-        :param param_name:
-        :return:
-        """
-        for node in self._ua_nodes[param_name]:
-            node.delete()
+        self._ua_nodes[param_name].delete()
         del self._ua_nodes[param_name]
+        if self._writable:
+            self._sub_handler[param_name].delete()
+            del self._sub_handler[param_name]
         rospy.loginfo('Deleted ROS Parameter: ' + param_name)
 
     def refresh_params(self, param_list):
         if param_list != self._previous:
-            delete_list = [name for name in self._ua_nodes if name not in param_list]
-            add_dict = {name: content for name, content in param_list.items() if name not in self._ua_nodes}
-            for node in delete_list:
-                self._delete_param(node)
+            add_dict = {name: content for name, content in param_list.items() if name not in self._previous}
+            delete_list = [name for name in self._previous if name not in param_list]
+            update_dict = {name: content for name, content in param_list.items()
+                           if name in self._previous and name not in delete_list and content != self._previous[name]}
             for name, content in add_dict.items():
-                self._ua_nodes[name] = []
-                self._create_param(name, content, self._root, self._ua_nodes[name])
+                self._create_param(name, content)
+            for name in delete_list:
+                self._delete_param(name)
+            for name, content in update_dict.items():
+                self._ua_nodes[name].set_value(content)
             self._previous = param_list
 
 
@@ -220,6 +237,16 @@ def _add_action(pub_list, sub_list):
 
 def _del_action(name_list):
     return [n for n in name_list if n.split('/')[-1] not in _action_feature_list]
+
+
+def _expand_params(param_dict, expand_dict, param_path=''):
+
+    for k, v in param_dict.items():
+        curr_path = param_path + '/' + k
+        if isinstance(v, dict):
+            _expand_params(v, expand_dict, curr_path)
+        else:
+            expand_dict[curr_path] = v
 
 
 class ROSInfoAgent:
@@ -246,6 +273,8 @@ class ROSInfoAgent:
         state = self._master.getSystemState()
         params = {key: value for key, value in self._master.getParam(self._namespace).items()
                   if key not in self._exclude_list}
+        expanded_params = {}
+        _expand_params(params, expanded_params)
 
         nodes = []
         for s in state:
@@ -268,7 +297,7 @@ class ROSInfoAgent:
                 node_info['pubs'] = _del_action(node_info['pubs'])
                 node_info['subs'] = _del_action(node_info['subs'])
             nodes_info_dict[node] = node_info
-        return nodes_info_dict, services, list(set(topics)), params
+        return nodes_info_dict, services, list(set(topics)), expanded_params
 
     def node_cleanup(self):
         _, unpinged = rosnode.rosnode_ping_all()

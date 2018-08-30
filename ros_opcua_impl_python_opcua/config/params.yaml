@@ -10,3 +10,5 @@ refresh_cycle_time: 0.5
 # False means the data types will be generated on the fly.
 # FIXME: Please notice, do not set it to true before the bug in ./scripts/ros_server fixed.
 import_xml_msgs: false
+# Control if the variables in parameters are writable
+parameter_writable: true

@@ -124,7 +124,7 @@ Extension object is defined actually in data type, data type must have encoding,
 
 ## Import xml instead of directly generate messages
 
-- [ ] Now the created extension objects can not be displayed correctly in UAExpert by importing xml, the import function seem to have mixed OPC UA dictionary and data type nodes, the created data became one specific node.
+- [ ] The created extension objects can not be displayed correctly in UAExpert by importing xml, the import function seem to have mixed OPC UA dictionary and data type nodes, the created data became one specific node.
 
 Besides, for a test case with 395 ros messages:
 
@@ -145,8 +145,10 @@ This problem happens sometimes, not always.
 
 ## Bug in UaExpert in displaying a list of objects
 
-- [ ] The object value display window will be covered by the object list view. Happens only on Ubuntu Unity, not on KDE
+- [x] The object value display window will be covered by the object list view. Happens only on Ubuntu Unity, not KDE
+
+Users should try to use it on KDE.
 
 ## Wait for the new release of python-opcua
 
-- [ ] Now the current release does not include our type_dictionary_builder.py, wait for new release.
+- [ ] The current release does not include our type_dictionary_builder.py, wait for new release.

@@ -26,6 +26,7 @@ class ROSBasicServer:
         self._auto_refresh = rospy.get_param('/rosopcua/automatic_refresh')
         self._refresh_cycle_time = rospy.get_param('/rosopcua/refresh_cycle_time')
         self._import_xml_msgs = rospy.get_param('/rosopcua/import_xml_msgs')
+        self._para_writable = rospy.get_param('/rosopcua/parameter_writable')
 
         self._type_dict = {}
         self._msgs_dict = {}
@@ -87,8 +88,6 @@ class ROSBasicClient:
         self._ros_node_name = 'opcuaclient'
         self._idx = None
         self._node_root = None
-        self._msgs = {}
-        self._srvs = {}
         self._topics = {}
         self._pub_topics = {}
         self._pub_parent = None
@@ -123,12 +122,6 @@ class ROSBasicClient:
             temp_dict[msg_name] = msg
         return temp_dict
 
-    def _refresh_msgs(self):
-        self._msgs = self._retrieve_ua_nodes('rosmsg')
-
-    def _refresh_svrs(self):
-        self._srvs = self._retrieve_ua_nodes('rossrv')
-
     def _refresh_topics(self):
         topic_folder = 'rostopic'
         self._topics = self._retrieve_ua_nodes(topic_folder, refs=ua.ObjectIds.HasProperty)
@@ -151,18 +144,6 @@ class ROSBasicClient:
     def _refresh_params(self):
         self._params = self._retrieve_ua_nodes('rosparam')
         self._params.update(self._retrieve_ua_nodes('rosparam', refs=ua.ObjectIds.HasProperty))
-
-    def list_msgs(self):
-        if not self._msgs:
-            self._refresh_msgs()
-        for msg in self._msgs:
-            rospy.loginfo(msg)
-
-    def list_srvs(self):
-        if not self._srvs:
-            self._refresh_svrs()
-        for srv in self._srvs:
-            rospy.loginfo(srv)
 
     def list_services(self):
         self._refresh_services()

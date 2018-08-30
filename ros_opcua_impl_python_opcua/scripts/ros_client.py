@@ -28,12 +28,6 @@ class ROSClient(ROSBasicClient):
 
 if __name__ == '__main__':
     with ROSClient() as client:
-        rospy.loginfo(' ----- rosmsg ------ ')
-        client.list_msgs()
-        time.sleep(1)
-        rospy.loginfo(' ----- rossrv ------ ')
-        client.list_srvs()
-        time.sleep(1)
         rospy.loginfo(' ----- rosservice ------ ')
         client.list_services()
         time.sleep(1)
