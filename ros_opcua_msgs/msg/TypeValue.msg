@@ -1,4 +1,5 @@
 # This represents OPC-UA type-value pair
+# type should be the basic types or rosmsg/rossrv class name
 string type
 bool bool_d
 int8 int8_d
@@ -11,4 +12,4 @@ int64 int64_d
 uint64 uint64_d
 float32 float_d
 float64 double_d
-string string_d
+string string_d # Can be serialized ROS Message, if type is not in basic types

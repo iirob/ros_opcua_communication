@@ -46,7 +46,7 @@ if __name__ == '__main__':
         rospy.loginfo(' ----- rosparam values ------ ')
         client.show_params()
         time.sleep(1)
-        rospy.loginfo(' ----- rosnode details------ ')
+        rospy.loginfo(' ----- rosnodes ------ ')
         client.show_ros_nodes()
         rospy.loginfo(' ----- static information end------ ')
 

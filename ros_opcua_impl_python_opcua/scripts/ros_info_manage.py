@@ -3,13 +3,26 @@ import rosgraph
 import rosnode
 
 from opcua import ua
+import opcua.common.type_dictionary_buider
 from ros_opc_ua_comm import OpcUaROSService, OpcUaROSTopic
 
 _action_feature_list = ('cancel', 'goal', 'result', 'feedback', 'status')
+# keep the name update with the basic ros server and client
+_server_name = 'rosopcua'
+_client_name = 'opcuaclient'
+_exclude_list = ('rosout', '/rosout', _server_name, '/' + _server_name, _client_name, '/' + _client_name)
 
 
 def _nodeid_generator(idx):
     return ua.NodeId(namespaceidx=idx)
+
+
+def _ua_class_to_ros_dict(msg_dict):
+    mapped_dict = {}
+    mapper = getattr(opcua.common.type_dictionary_buider, '_to_camel_case')
+    for key in msg_dict:
+        mapped_dict[mapper(key)] = key
+    return mapped_dict
 
 
 class ROSServiceManager:
@@ -20,11 +33,16 @@ class ROSServiceManager:
         self._root = node_root.add_folder(_nodeid_generator(self._idx), 'rosservice')
         self._services = {}
         self._ua_nodes = {}
+        self._reverse_dict = _ua_class_to_ros_dict(type_dict)
 
     def _create_service(self, name):
-        service = OpcUaROSService(name, self._root, _nodeid_generator(self._idx), self._type_dict)
-        self._services[name] = service
-        self._ua_nodes[name] = service.get_node()
+        try:
+            service = OpcUaROSService(name, self._root, _nodeid_generator(self._idx),
+                                      self._type_dict, self._reverse_dict)
+            self._services[name] = service
+            self._ua_nodes[name] = service.get_node()
+        except Exception as e:
+            rospy.logerr(str(e))
 
     def _delete_service(self, name):
         self._services[name].delete_node()
@@ -56,12 +74,17 @@ class ROSTopicManager:
         self._status_ua_node = {}
         self._publish_ua_node = {}
 
+        self._reverse_dict = _ua_class_to_ros_dict(type_dict)
+
     def _create_topic(self, name):
-        new_topic = OpcUaROSTopic(name, self._root, self._pub_root, self._type_dict,
-                                  _nodeid_generator(self._idx), _nodeid_generator(self._idx))
-        self._topics[name] = new_topic
-        self._status_ua_node[name] = new_topic.get_status_node()
-        self._publish_ua_node[name] = new_topic.get_publish_node()
+        try:
+            new_topic = OpcUaROSTopic(name, self._root, self._pub_root, self._type_dict, self._reverse_dict,
+                                      _nodeid_generator(self._idx), _nodeid_generator(self._idx))
+            self._topics[name] = new_topic
+            self._status_ua_node[name] = new_topic.get_status_node()
+            self._publish_ua_node[name] = new_topic.get_publish_node()
+        except Exception as e:
+            rospy.logerr(str(e))
 
     def _delete_topic(self, name):
         self._topics[name].delete_node()
@@ -252,13 +275,10 @@ def _expand_params(param_dict, expand_dict, param_path=''):
 class ROSInfoAgent:
 
     def __init__(self, ros_namespace):
-        # keep the name update with the basic ros server and client
-        server_name = 'rosopcua'
-        client_name = 'opcuaclient'
-        self._exclude_list = ('rosout', '/rosout', server_name, '/' + server_name, client_name, '/' + client_name)
+        self._exclude_list = _exclude_list
         self._namespace = ros_namespace
         self._ns = rosgraph.names.make_global_ns(self._namespace)
-        self._master = rosgraph.Master(server_name)
+        self._master = rosgraph.Master(_server_name)
 
     def _extract_info(self, info):
         return sorted([t for t, l in info if (t == self._namespace or t.startswith(self._ns))

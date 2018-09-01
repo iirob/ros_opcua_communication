@@ -9,32 +9,32 @@ import rospkg
 from opcua import ua, uamethod
 from opcua.common.type_dictionary_buider import DataTypeDictionaryBuilder, get_ua_class
 
-_ros_build_in_types = {'bool': ua.VariantType.Boolean,
-                       'int8': ua.VariantType.SByte,
-                       'byte': ua.VariantType.SByte,  # deprecated int8
-                       'uint8': ua.VariantType.Byte,
-                       'char': ua.VariantType.Byte,  # deprecated uint8
-                       'int16': ua.VariantType.Int16,
-                       'uint16': ua.VariantType.UInt16,
-                       'int32': ua.VariantType.Int32,
-                       'uint32': ua.VariantType.UInt32,
-                       'int64': ua.VariantType.Int64,
-                       'uint64': ua.VariantType.UInt64,
-                       'float32': ua.VariantType.Float,
-                       'float64': ua.VariantType.Float,
-                       'string': ua.VariantType.String}
+ros_build_in_types = {'bool': ua.VariantType.Boolean,
+                      'int8': ua.VariantType.SByte,
+                      'byte': ua.VariantType.SByte,  # deprecated int8
+                      'uint8': ua.VariantType.Byte,
+                      'char': ua.VariantType.Byte,  # deprecated uint8
+                      'int16': ua.VariantType.Int16,
+                      'uint16': ua.VariantType.UInt16,
+                      'int32': ua.VariantType.Int32,
+                      'uint32': ua.VariantType.UInt32,
+                      'int64': ua.VariantType.Int64,
+                      'uint64': ua.VariantType.UInt64,
+                      'float32': ua.VariantType.Float,
+                      'float64': ua.VariantType.Float,
+                      'string': ua.VariantType.String}
 
-_ua_basic_types = [item.name for item in _ros_build_in_types.values()]
+ua_basic_types = [item.name for item in ros_build_in_types.values()]
 
 
 def expand_ua_class(obj, level=0):
     """expand ua class to plain text"""
     if not obj:
         return None
-    buff = '\n{}ua_object, type: {}'.format(level*'\t', obj.__class__.__name__)
+    buff = '\n{}ua_object, type: {}'.format(level * '\t', obj.__class__.__name__)
     for var, data_type in obj.ua_types:
-        if data_type in _ua_basic_types:
-            buff += '\n\t{}:{}'.format(level*'\t' + var, getattr(obj, var))
+        if data_type in ua_basic_types:
+            buff += '\n\t{}:{}'.format(level * '\t' + var, getattr(obj, var))
         else:
             if isinstance(getattr(obj, var), list):
                 for member in getattr(obj, var):
@@ -48,8 +48,8 @@ def expand_ua_class(obj, level=0):
 
 
 def _lookup_type(type_name):
-    if type_name in _ros_build_in_types:
-        return _ros_build_in_types[type_name]
+    if type_name in ros_build_in_types:
+        return ros_build_in_types[type_name]
     return type_name
 
 
@@ -93,36 +93,36 @@ def _extract_ros_array_info(type_str):
     return type_str, is_array
 
 
-def _to_ros_msg(ua_class, ros_msg):
-    for attr in ua_class.ua_types:
+def to_ros_msg(ua_obj, ros_msg, msg_dict):
+    for attr in ua_obj.ua_types:
         base_type_str, is_array = _extract_ua_array_info(attr[1])
-        if base_type_str in _ua_basic_types:
-            setattr(ros_msg, attr[0], getattr(ua_class, attr[0]))
+        if base_type_str in ua_basic_types:
+            setattr(ros_msg, attr[0], getattr(ua_obj, attr[0]))
         else:
             if is_array:
-                for member in getattr(ua_class, attr[0]):
-                    new_ros_msg = roslib.message.get_message_class(base_type_str)
+                for member in getattr(ua_obj, attr[0]):
+                    new_ros_msg = roslib.message.get_message_class(msg_dict[base_type_str])()
                     getattr(ros_msg, attr[0]).append(new_ros_msg)
-                    _to_ros_msg(member, new_ros_msg())
+                    to_ros_msg(member, new_ros_msg, msg_dict)
             else:
-                _to_ros_msg(getattr(ua_class, attr[0]), getattr(ros_msg, attr[0]))
+                to_ros_msg(getattr(ua_obj, attr[0]), getattr(ros_msg, attr[0]), msg_dict)
     return ros_msg
 
 
-def _to_ua_class(ros_msg, ua_class):
+def to_ua_class(ros_msg, ua_obj):
     for attr, data_type in zip(ros_msg.__slots__, getattr(ros_msg, '_slot_types')):
         base_type_str, is_array = _extract_ros_array_info(data_type)
-        if base_type_str in _ros_build_in_types:
-            setattr(ua_class, attr, getattr(ros_msg, attr))
+        if base_type_str in ros_build_in_types:
+            setattr(ua_obj, attr, getattr(ros_msg, attr))
         else:
             if is_array:
                 for member in getattr(ros_msg, attr):
                     new_ua_class = get_ua_class(getattr(member, '_type'))()
-                    getattr(ua_class, attr).append(new_ua_class)
-                    _to_ua_class(member, new_ua_class)
+                    getattr(ua_obj, attr).append(new_ua_class)
+                    to_ua_class(member, new_ua_class)
             else:
-                _to_ua_class(getattr(ros_msg, attr), getattr(ua_class, attr))
-    return ua_class
+                to_ua_class(getattr(ros_msg, attr), getattr(ua_obj, attr))
+    return ua_obj
 
 
 def _create_args(msg_class, data_type):
@@ -150,7 +150,7 @@ class OpcUaROSMessage:
     def _is_new_type(self, message):
         if not isinstance(message, str):
             message = message.name
-        return message not in _ros_build_in_types and message not in self._created_struct_nodes
+        return message not in ros_build_in_types and message not in self._created_struct_nodes
 
     def _create_data_type(self, type_name):
         new_dt = self._dict_builder.create_data_type(type_name)
@@ -205,7 +205,7 @@ class OpcUaROSMessage:
 
 class OpcUaROSService:
 
-    def __init__(self, service_name, node_root, service_node_id, msg_dict):
+    def __init__(self, service_name, node_root, service_node_id, msg_dict, reverse_dict):
         self._service_class = rosservice.get_service_class_by_name(service_name)
         self._service_name = service_name
         self._proxy = rospy.ServiceProxy(service_name, self._service_class)
@@ -222,6 +222,7 @@ class OpcUaROSService:
         output_arg = _create_args(self._ros_service_resp, out_dt_node_id)
 
         self._method = node_root.add_method(service_node_id, service_name, self._call_service, input_arg, output_arg)
+        self._msg_dict = reverse_dict
         rospy.loginfo('Created ROS Service: ' + service_name)
 
     @uamethod
@@ -229,11 +230,11 @@ class OpcUaROSService:
         rospy.loginfo('Calling service {0} under ROS node: {1}'.format(self._service_name,
                                                                        self._node_root.get_display_name().Text))
         try:
-            ua_class = inputs[0] if inputs else get_ua_class(self._req_name)()
-            response = self._proxy(_to_ros_msg(ua_class, self._ros_service_req()))
+            ua_obj = inputs[0] if inputs else get_ua_class(self._req_name)()
+            response = self._proxy(to_ros_msg(ua_obj, self._ros_service_req(), self._msg_dict))
             rospy.loginfo('Calling service succeeded!')
             if response.__slots__:
-                resp_ua_class = _to_ua_class(response, get_ua_class(self._resp_name)())
+                resp_ua_class = to_ua_class(response, get_ua_class(self._resp_name)())
                 return ua.Variant(resp_ua_class)
         except Exception as e:
             rospy.logerr('Error when calling service ' + self._service_name, e)
@@ -249,7 +250,7 @@ class OpcUaROSService:
 
 class OpcUaROSTopic:
 
-    def __init__(self, topic_name, status_root, pub_root, msg_dict, *node_id):
+    def __init__(self, topic_name, status_root, pub_root, msg_dict, reverse_dict, *node_id):
         self._topic_name = topic_name
         self._topic_class, _, _ = rostopic.get_topic_class(self._topic_name)
         self._msg_name = getattr(self._topic_class, '_type')
@@ -260,17 +261,18 @@ class OpcUaROSTopic:
 
         input_arg = _create_args(self._topic_class, msg_dict[self._msg_name])
         self._method = pub_root.add_method(node_id[1], self._topic_name, self._call_publish, input_arg, [])
+        self._msg_dict = reverse_dict
         rospy.loginfo('Created ROS Topic: ' + self._topic_name)
 
     def _message_callback(self, message):
-        self._topic.set_value(_to_ua_class(message, get_ua_class(self._msg_name)()))
+        self._topic.set_value(to_ua_class(message, get_ua_class(self._msg_name)()))
 
     @uamethod
     def _call_publish(self, _, *inputs):
         rospy.loginfo('Publishing data under ROS Topic: ' + self._topic_name)
         try:
-            ua_class = inputs[0] if inputs else get_ua_class(self._topic_class)()
-            self._pub_handler.publish(_to_ros_msg(ua_class, self._topic_class()))
+            ua_obj = inputs[0] if inputs else get_ua_class(self._topic_class)()
+            self._pub_handler.publish(to_ros_msg(ua_obj, self._topic_class(), self._msg_dict))
             rospy.loginfo('Topic publishing succeeded!')
         except Exception as e:
             rospy.logerr('Error when publishing topic ' + self._topic, e)
