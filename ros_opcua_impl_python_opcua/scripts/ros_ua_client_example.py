@@ -1,4 +1,7 @@
 #!/usr/bin/python
+"""
+This client is only specifically designed for ros_server
+"""
 import time
 import rospy
 

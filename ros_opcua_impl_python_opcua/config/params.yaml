@@ -5,6 +5,11 @@ automatic_refresh: true
 # The automatic refresh time, if automatic_refresh is false this will not be considered
 # The unit is second
 refresh_cycle_time: 0.5
+# Switches for specific ros information
+show_nodes: true
+show_topics: true
+show_services: true
+show_params: true
 # True means data types will be imported from an xml file, its address is written in
 # ./scripts/ros_opc_ua_comm under the variable message_export_path.
 # False means the data types will be generated on the fly.
@@ -12,3 +17,5 @@ refresh_cycle_time: 0.5
 import_xml_msgs: false
 # Control if the variables in parameters are writable
 parameter_writable: true
+# TODO: filters for specific topics, services
+#topics: [/turle1/cmd_vel, /turtle1/color_sensor]

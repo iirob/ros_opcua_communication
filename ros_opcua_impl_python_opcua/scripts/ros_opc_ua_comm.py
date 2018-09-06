@@ -170,6 +170,7 @@ class OpcUaROSMessage:
             msg.add_field(variable_type, _lookup_type(base_type_str), is_array)
 
     def _create_messages(self):
+        # TODO: maybe apply filter here for partial loading
         messages = _get_ros_msg(rosmsg.MODE_MSG)
         for msg in messages:
             if msg not in self._created_struct_nodes:
@@ -184,6 +185,7 @@ class OpcUaROSMessage:
 
     def _create_services(self):
         """since srv can not embed another .srv, no recursion is needed"""
+        # TODO: maybe apply filter here for partial loading
         services = _get_ros_msg(rosmsg.MODE_SRV)
         for srv in services:
             service = roslib.message.get_service_class(srv)

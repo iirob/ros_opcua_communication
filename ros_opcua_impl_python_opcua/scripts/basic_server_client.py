@@ -25,6 +25,10 @@ class ROSBasicServer:
         self._namespace_ros = rospy.get_param('/rosopcua/namespace')
         self._auto_refresh = rospy.get_param('/rosopcua/automatic_refresh')
         self._refresh_cycle_time = rospy.get_param('/rosopcua/refresh_cycle_time')
+        self._show_nodes = rospy.get_param('/rosopcua/show_nodes')
+        self._show_topics = rospy.get_param('/rosopcua/show_topics')
+        self._show_services = rospy.get_param('/rosopcua/show_services')
+        self._show_params = rospy.get_param('/rosopcua/show_params')
         self._import_xml_msgs = rospy.get_param('/rosopcua/import_xml_msgs')
         self._para_writable = rospy.get_param('/rosopcua/parameter_writable')
 
@@ -105,7 +109,7 @@ class ROSBasicClient:
         return temp_dict
 
     def _refresh_topics(self):
-        topic_folder = 'rostopic'
+        topic_folder = 'Topics'
         self._topics = self._retrieve_ua_nodes(topic_folder, refs=ua.ObjectIds.HasProperty)
         if not self._pub_parent:
             self._pub_parent = self._retrieve_ua_nodes(topic_folder).values()[0]
@@ -115,16 +119,16 @@ class ROSBasicClient:
             self._pub_topics[msg_name] = method
 
     def _refresh_services(self):
-        services_folder_name = 'rosservice'
+        services_folder_name = 'Services'
         if not self._service_parent:
             self._service_parent = self._root.get_child(services_folder_name)
         self._services = self._retrieve_ua_nodes(services_folder_name, refs=ua.ObjectIds.HasComponent)
 
     def _refresh_nodes(self):
-        self._nodes = self._retrieve_ua_nodes('rosnode')
+        self._nodes = self._retrieve_ua_nodes('Nodes')
 
     def _refresh_params(self):
-        self._params = self._retrieve_ua_nodes('rosparam', refs=ua.ObjectIds.HasProperty)
+        self._params = self._retrieve_ua_nodes('Parameters', refs=ua.ObjectIds.HasProperty)
 
     def list_services(self):
         self._refresh_services()
@@ -207,7 +211,7 @@ class ROSBasicClient:
             subs = sub_node.get_children(refs=ua.ObjectIds.Organizes)
             for sub in subs:
                 sub_name = sub.get_display_name().Text
-                if sub_name != 'topic publish':
+                if sub_name != 'Topic publish':
                     rospy.loginfo('\t\t{}'.format(sub_name))
         except UaError:
             pass

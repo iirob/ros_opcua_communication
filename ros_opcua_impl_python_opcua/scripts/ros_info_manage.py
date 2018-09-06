@@ -21,7 +21,7 @@ class ROSServiceManager:
     def __init__(self, idx, node_root, type_dict, reverse_dict):
         self._idx = idx
         self._type_dict = type_dict
-        self._root = node_root.add_folder(_nodeid_generator(self._idx), 'rosservice')
+        self._root = node_root.add_folder(_nodeid_generator(self._idx), 'Services')
         self._services = {}
         self._ua_nodes = {}
         self._reverse_dict = reverse_dict
@@ -58,8 +58,8 @@ class ROSTopicManager:
     def __init__(self, idx, node_root, type_dict, reverse_dict):
         self._idx = idx
         self._type_dict = type_dict
-        self._root = node_root.add_folder(_nodeid_generator(self._idx), 'rostopic')
-        self._pub_root = self._root.add_folder(_nodeid_generator(self._idx), 'topic publish')
+        self._root = node_root.add_folder(_nodeid_generator(self._idx), 'Topics')
+        self._pub_root = None
 
         self._topics = {}
         self._status_ua_node = {}
@@ -69,6 +69,8 @@ class ROSTopicManager:
 
     def _create_topic(self, name):
         try:
+            if not self._pub_root:
+                self._pub_root = self._root.add_folder(_nodeid_generator(self._idx), 'Topic publish')
             new_topic = OpcUaROSTopic(name, self._root, self._pub_root, self._type_dict, self._reverse_dict,
                                       _nodeid_generator(self._idx), _nodeid_generator(self._idx))
             self._topics[name] = new_topic
@@ -104,7 +106,7 @@ class ROSNodeManager:
     def __init__(self, idx, node_root, type_dict, service_nodes, topic_status_nodes, topic_publish_nodes):
         self._idx = idx
         self._type_dict = type_dict
-        self._root = node_root.add_folder(_nodeid_generator(self._idx), 'rosnode')
+        self._root = node_root.add_folder(_nodeid_generator(self._idx), 'Nodes')
         self._service_nodes = service_nodes
         self._topic_status_nodes = topic_status_nodes
         self._topic_publish_nodes = topic_publish_nodes
@@ -126,7 +128,7 @@ class ROSNodeManager:
             self._ua_nodes[node_name].append(pub_node)
         if content_sub:
             sub_node = ua_node.add_folder(_nodeid_generator(self._idx), 'Subscriptions')
-            sub_node_publish = sub_node.add_folder(_nodeid_generator(self._idx), 'topic publish')
+            sub_node_publish = sub_node.add_folder(_nodeid_generator(self._idx), 'Topic publish')
             for subscribe in content_sub:
                 sub_node.add_reference(self._topic_status_nodes[subscribe], ua.ObjectIds.Organizes)
                 sub_node_publish.add_reference(self._topic_publish_nodes[subscribe], ua.ObjectIds.Organizes)
@@ -141,7 +143,7 @@ class ROSNodeManager:
             self._ua_nodes[node_name].append(action_node)
             # action server, with extra publish
             if content['is_action_server']:
-                action_publish = action_node.add_folder(_nodeid_generator(self._idx), 'topic publish')
+                action_publish = action_node.add_folder(_nodeid_generator(self._idx), 'Topic publish')
                 for topic in content['topics']:
                     if 'goal' in topic or 'cancel' in topic:
                         action_publish.add_reference(self._topic_publish_nodes[topic], ua.ObjectIds.Organizes)
@@ -194,7 +196,7 @@ class ROSParamManager:
     def __init__(self, idx, node_root, writable=False, server=None):
         self._server = server
         self._idx = idx
-        self._root = node_root.add_folder(_nodeid_generator(self._idx), 'rosparam')
+        self._root = node_root.add_folder(_nodeid_generator(self._idx), 'Parameters')
 
         self._ua_nodes = {}
         self._sub_handler = {}
@@ -271,11 +273,15 @@ def _expand_params(param_dict, expand_dict, param_path=''):
 
 class ROSInfoAgent:
 
-    def __init__(self, ros_namespace):
+    def __init__(self, ros_namespace, show_nodes, show_topics, show_services, show_params):
         self._exclude_list = _exclude_list
         self._namespace = ros_namespace
         self._ns = rosgraph.names.make_global_ns(self._namespace)
         self._master = rosgraph.Master(_server_name)
+        self._show_nodes = show_nodes
+        self._show_topics = show_topics
+        self._show_services = show_services
+        self._show_params = show_params
 
     def _extract_info(self, info):
         return sorted([t for t, l in info if (t == self._namespace or t.startswith(self._ns))
@@ -288,33 +294,43 @@ class ROSInfoAgent:
 
     def get_ros_info(self):
         state = self._master.getSystemState()
-        params = {key: value for key, value in self._master.getParam(self._namespace).items()
-                  if key not in self._exclude_list}
-        expanded_params = {}
-        _expand_params(params, expanded_params)
 
-        nodes = []
-        for s in state:
-            for t, l in s:
-                nodes.extend(l)
-        nodes = [node for node in list(set(nodes)) if node.split('/')[-1] not in self._exclude_list]
+        topics = []
+        if self._show_topics:
+            topics = self._extract_info(state[0])
+            topics += self._extract_info(state[1])
+            topics = list(set(topics))
 
-        topics = self._extract_info(state[0])
-        topics += self._extract_info(state[1])
-        services = self._extract_info(state[2])
+        services = []
+        if self._show_services:
+            services = self._extract_info(state[2])
 
         nodes_info_dict = {}
-        for node in nodes:
-            node_info = {'pubs': self._extract_node_info(state[0], node),
-                         'subs': self._extract_node_info(state[1], node),
-                         'srvs': self._extract_node_info(state[2], node),
-                         'acts': {}}
-            if _is_action(node_info['pubs'], _action_feature_list):
-                node_info['acts'] = _add_action(node_info['pubs'], node_info['subs'])
-                node_info['pubs'] = _del_action(node_info['pubs'])
-                node_info['subs'] = _del_action(node_info['subs'])
-            nodes_info_dict[node] = node_info
-        return nodes_info_dict, services, list(set(topics)), expanded_params
+        if self._show_nodes:
+            nodes = []
+            for s in state:
+                for t, l in s:
+                    nodes.extend(l)
+            nodes = [node for node in list(set(nodes)) if node.split('/')[-1] not in self._exclude_list]
+
+            for node in nodes:
+                node_info = {'pubs': self._extract_node_info(state[0], node) if self._show_topics else [],
+                             'subs': self._extract_node_info(state[1], node) if self._show_topics else [],
+                             'srvs': self._extract_node_info(state[2], node) if self._show_services else [],
+                             'acts': {}}
+                if _is_action(node_info['pubs'], _action_feature_list):
+                    node_info['acts'] = _add_action(node_info['pubs'], node_info['subs'])
+                    node_info['pubs'] = _del_action(node_info['pubs'])
+                    node_info['subs'] = _del_action(node_info['subs'])
+                nodes_info_dict[node] = node_info
+
+        expanded_params = {}
+        if self._show_params:
+            params = {key: value for key, value in self._master.getParam(self._namespace).items()
+                      if key not in self._exclude_list}
+            _expand_params(params, expanded_params)
+
+        return nodes_info_dict, services, topics, expanded_params
 
     def node_cleanup(self):
         _, unpinged = rosnode.rosnode_ping_all()

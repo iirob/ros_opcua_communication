@@ -64,7 +64,7 @@ class SubHandler:
         self._pub.publish(_set_value(val[1], self._msg_dict, self._ros_msg_name))
 
 
-class ROSOPCViewer:
+class ROSOPCClient:
     """
     Note that the name opcuaclient is in exclude list, launch this ros node makes no change on ua server.
     """
@@ -146,17 +146,25 @@ class ROSOPCViewer:
         node_type_id = node.get_type_definition()
         if node_type_id:
             node_type = self._client.get_node(node.get_type_definition()).get_browse_name()
-            address.nodeInfo.append('Type:' + node_type.Name.replace('Type', ''))
+            address.nodeInfo.append('NodeType:' + node_type.Name.replace('Type', ''))
             if node.get_node_class() == ua.NodeClass.Variable:
                 data_type = self._client.get_node(node.get_data_type()).get_display_name().Text
                 address.nodeInfo.append('DataType:' + data_type)
         elif node.get_node_class() == ua.NodeClass.Method:
-            address.nodeInfo.append('Type:Method')
+            address.nodeInfo.append('NodeType:Method')
             for child in node.get_children():
                 if child.get_browse_name().Name == 'InputArguments':
-                    arg_name = child.get_value()[0].Name
-                    if arg_name:
-                        address.nodeInfo.append('InputDataType:' + arg_name)
+                    for arg in child.get_value():
+                        if arg.Name:
+                            address.nodeInfo.append('InputDataType:' + arg.Name)
+                        else:
+                            address.nodeInfo.append('InputDataType:' + ua.VariantType(arg.DataType.Identifier).name)
+                if child.get_browse_name().Name == 'OutputArguments':
+                    for arg in child.get_value():
+                        if arg.Name:
+                            address.nodeInfo.append('OutputDataType:' + arg.Name)
+                        else:
+                            address.nodeInfo.append('OutputDataType:' + ua.VariantType(arg.DataType.Identifier).name)
 
     def _list_node(self, request):
         response = ListNodeResponse()
@@ -167,7 +175,7 @@ class ROSOPCViewer:
                 root = self._client.get_node(request.node.nodeId)
             for node in root.get_children():
                 address = Address()
-                address.nodeId = str(node.nodeid)
+                address.nodeId = node.nodeid.to_string()
                 address.qualifiedName = node.get_browse_name().Name
                 self._add_addition_info(node, address)
                 response.children.append(address)
@@ -268,7 +276,7 @@ class ROSOPCViewer:
                 rospy.loginfo(' ----- Unsubscribe successful! ------ ')
                 response.success = True
             except Exception as error:
-                rospy.logerr(' ----- Subscribe failed! ------ ')
+                rospy.logerr(' ----- Unsubscribe failed! ------ ')
                 response.success = False
                 response.error_message = str(error)
         else:
@@ -279,8 +287,8 @@ class ROSOPCViewer:
 
 if __name__ == '__main__':
     try:
-        with ROSOPCViewer():
-            rospy.loginfo(' ----- ROS OPC UA Viewer started! ------ ')
+        with ROSOPCClient():
+            rospy.loginfo(' ----- ROS OPC UA Client started! ------ ')
             rospy.spin()
     except Exception as e:
         print(e.message)

@@ -17,7 +17,8 @@ class ROSServer(ROSBasicServer):
         self._msg_folder = self._type_root.add_folder(self._nodeid_generator(), 'MsgType')
         self._srv_folder = self._type_root.add_folder(self._nodeid_generator(), 'SrvType')
 
-        self._agent = ROSInfoAgent(self._namespace_ros)
+        self._agent = ROSInfoAgent(self._namespace_ros, self._show_nodes, self._show_topics,
+                                   self._show_services, self._show_params)
 
     def _load_messages(self):
         # FIXME: 1. bugs after xml import, extension object can not be used
