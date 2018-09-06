@@ -1,4 +1,3 @@
-# Thanks to https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel
 import rospy
 import roslib.message
 import rostopic

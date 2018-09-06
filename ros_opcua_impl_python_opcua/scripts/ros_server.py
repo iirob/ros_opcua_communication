@@ -46,9 +46,17 @@ class ROSServer(ROSBasicServer):
         self._link_msg(self._msg_folder, self._msgs_dict)
         self._link_msg(self._srv_folder, self._srvs_dict)
 
+    def _create_reverse_dict(self):
+        reverse_dict = {}
+        for msg in self._type_dict:
+            node = self._server.get_node(self._type_dict[msg])
+            reverse_dict[node.get_browse_name().Name] = msg
+        return reverse_dict
+
     def _initialize_info_managers(self):
-        self._service_manager = ROSServiceManager(self._idx, self._root, self._type_dict)
-        self._topic_manager = ROSTopicManager(self._idx, self._root, self._type_dict)
+        reverse_dict = self._create_reverse_dict()
+        self._service_manager = ROSServiceManager(self._idx, self._root, self._type_dict, reverse_dict)
+        self._topic_manager = ROSTopicManager(self._idx, self._root, self._type_dict, reverse_dict)
 
         service_ua_nodes = self._service_manager.get_node_dict()
         topic_status_nodes = self._topic_manager.get_status_ua_node()
@@ -96,6 +104,3 @@ if __name__ == '__main__':
             ua_server.refresh()
     except Exception as e:
         print(e.message)
-    # ua_server = ROSServer()
-    # ua_server.initialize_server()
-    # ua_server.refresh()

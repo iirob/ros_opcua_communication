@@ -37,7 +37,7 @@ def _set_value(data, msg_dict, ros_msg_name=None):
         value.type = ros_msg_name
         serializer = io.BytesIO()
         ros_msg.serialize(serializer)
-        value.string_d = serializer.getvalue()
+        value.string_d = str(serializer.getvalue())
     else:
         var_type = ua.Variant(data).VariantType
         for k, v in ros_build_in_types.items():
@@ -154,9 +154,9 @@ class ROSOPCViewer:
             address.nodeInfo.append('Type:Method')
             for child in node.get_children():
                 if child.get_browse_name().Name == 'InputArguments':
-                    input = child.get_value()[0].Name
-                    if input:
-                        address.nodeInfo.append('InputDataType:' + input)
+                    arg_name = child.get_value()[0].Name
+                    if arg_name:
+                        address.nodeInfo.append('InputDataType:' + arg_name)
 
     def _list_node(self, request):
         response = ListNodeResponse()

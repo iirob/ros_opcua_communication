@@ -3,7 +3,6 @@ import rosgraph
 import rosnode
 
 from opcua import ua
-import opcua.common.type_dictionary_buider
 from ros_opc_ua_comm import OpcUaROSService, OpcUaROSTopic
 
 _action_feature_list = ('cancel', 'goal', 'result', 'feedback', 'status')
@@ -17,23 +16,15 @@ def _nodeid_generator(idx):
     return ua.NodeId(namespaceidx=idx)
 
 
-def _ua_class_to_ros_dict(msg_dict):
-    mapped_dict = {}
-    mapper = getattr(opcua.common.type_dictionary_buider, '_to_camel_case')
-    for key in msg_dict:
-        mapped_dict[mapper(key)] = key
-    return mapped_dict
-
-
 class ROSServiceManager:
 
-    def __init__(self, idx, node_root, type_dict):
+    def __init__(self, idx, node_root, type_dict, reverse_dict):
         self._idx = idx
         self._type_dict = type_dict
         self._root = node_root.add_folder(_nodeid_generator(self._idx), 'rosservice')
         self._services = {}
         self._ua_nodes = {}
-        self._reverse_dict = _ua_class_to_ros_dict(type_dict)
+        self._reverse_dict = reverse_dict
 
     def _create_service(self, name):
         try:
@@ -64,7 +55,7 @@ class ROSServiceManager:
 
 class ROSTopicManager:
 
-    def __init__(self, idx, node_root, type_dict):
+    def __init__(self, idx, node_root, type_dict, reverse_dict):
         self._idx = idx
         self._type_dict = type_dict
         self._root = node_root.add_folder(_nodeid_generator(self._idx), 'rostopic')
@@ -74,7 +65,7 @@ class ROSTopicManager:
         self._status_ua_node = {}
         self._publish_ua_node = {}
 
-        self._reverse_dict = _ua_class_to_ros_dict(type_dict)
+        self._reverse_dict = reverse_dict
 
     def _create_topic(self, name):
         try:
@@ -157,12 +148,15 @@ class ROSNodeManager:
                 self._ua_nodes[node_name].append(action_publish)
 
     def _create_node(self, node_name, node_content):
-        ua_node = self._root.add_folder(_nodeid_generator(self._idx), node_name)
-        self._ua_nodes[node_name] = [ua_node]
-        self._link_services(ua_node, node_name, node_content['srvs'])
-        self._link_topics(ua_node, node_name, node_content['pubs'], node_content['subs'])
-        self._link_action(ua_node, node_name, node_content['acts'])
-        rospy.loginfo('Created ROS Node: ' + node_name)
+        try:
+            ua_node = self._root.add_folder(_nodeid_generator(self._idx), node_name)
+            self._ua_nodes[node_name] = [ua_node]
+            self._link_services(ua_node, node_name, node_content['srvs'])
+            self._link_topics(ua_node, node_name, node_content['pubs'], node_content['subs'])
+            self._link_action(ua_node, node_name, node_content['acts'])
+            rospy.loginfo('Created ROS Node: ' + node_name)
+        except Exception as e:
+            rospy.logerr(str(e))
 
     def _delete_node(self, node_name):
         for node in self._ua_nodes[node_name]:
@@ -208,14 +202,17 @@ class ROSParamManager:
         self._writable = writable
 
     def _create_param(self, param_name, param_value):
-        new_param = self._root.add_property(_nodeid_generator(self._idx), param_name, param_value)
-        if self._writable:
-            new_param.set_writable()
-            sub = self._server.create_subscription(500, SubHandler(param_name, param_value))
-            sub.subscribe_data_change(new_param)
-            self._sub_handler[param_name] = sub
-        self._ua_nodes[param_name] = new_param
-        rospy.loginfo('Created ROS Parameter: ' + param_name)
+        try:
+            new_param = self._root.add_property(_nodeid_generator(self._idx), param_name, param_value)
+            if self._writable:
+                new_param.set_writable()
+                sub = self._server.create_subscription(500, SubHandler(param_name, param_value))
+                sub.subscribe_data_change(new_param)
+                self._sub_handler[param_name] = sub
+            self._ua_nodes[param_name] = new_param
+            rospy.loginfo('Created ROS Parameter: ' + param_name)
+        except Exception as e:
+            rospy.logerr(str(e))
 
     def _delete_param(self, param_name):
         self._ua_nodes[param_name].delete()
