@@ -106,3 +106,7 @@ Inheriting the two classes in `scripts/basic_server_client.py` can save time for
 
 To implement filters in static modeling, it would be better to modify the low layer; in dynamic modeling, it would be better to modify the class `ROSInfoAgent` in the high layer, so that the server does not "see" a specific node, topic, service or parameter.
 
+### Specification document
+
+Please check the [ROS-OPC UA Connector 3.0.pdf](./ROS-OPC UA Connector 3.0.pdf) for detailed information.
+
