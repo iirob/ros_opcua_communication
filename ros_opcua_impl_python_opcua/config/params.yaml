@@ -1,3 +1,5 @@
+# endpoint of the server
+end_point: 'opc.tcp://141.3.80.78:18801/ROSServer'
 # range of the ros topics, services and actions, default '/' means no filter
 namespace: '/'
 # True will start automatic refresh of ros nodes

@@ -14,7 +14,9 @@ class ROSBasicServer:
     def __init__(self):
         self._server = Server()
 
-        self._server.set_endpoint(server_end_point)
+        self._end_point = rospy.get_param('rosopcua/end_point', server_end_point)
+        
+        self._server.set_endpoint(self._end_point)
         self._server.set_server_name('ROS UA Server')
         self._idx_name = ros_idx_name
         self._idx = self._server.register_namespace(self._idx_name)
