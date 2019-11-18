@@ -266,14 +266,14 @@ def numberofsubscribers(nametolookfor, topicsDict):
     return ret
 
 
-def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics,
-                               actions):
+def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics, actions):
     ros_topics = rospy.get_published_topics(namespace_ros)
     rospy.logdebug(str(ros_topics))
     rospy.logdebug(str(rospy.get_published_topics('/move_base_simple')))
     for topic_name, topic_type in ros_topics:
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
-            if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
+            splits = topic_name.split('/')
+            if "cancel" in splits[-1] or "result" in splits[-1] or "feedback" in splits[-1] or "goal" in splits[-1] or "status" in splits[-1]:
                 rospy.logdebug("Found an action: " + str(topic_name))
                 correct_name = ros_actions.get_correct_name(topic_name)
                 if correct_name not in actionsdict:
@@ -323,7 +323,7 @@ def get_feedback_type(action_name):
             type, name, fn = rostopic.get_topic_type(action_name + "/Feedback", e)
             return type
         except rospy.ROSException as e2:
-            rospy.logerr("Couldnt find feedback type for action " + action_name, e2)
+            rospy.logerr("Couldn't find feedback type for action " + action_name, e2)
             return None
 
 
@@ -336,5 +336,5 @@ def get_goal_type(action_name):
             type, name, fn = rostopic.get_topic_type(action_name + "/Goal", e)
             return type
         except rospy.ROSException as e2:
-            rospy.logerr("Couldnt find feedback type for action " + action_name, e2)
+            rospy.logerr("Couldn't find goal type for action " + action_name, e2)
             return None

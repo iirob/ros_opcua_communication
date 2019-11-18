@@ -1,5 +1,6 @@
 # !/usr/bin/python
 # thanks to https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_action/src/rqt_action/action_plugin.py
+import string
 import random
 from pydoc import locate
 
@@ -344,20 +345,8 @@ class OpcUaROSAction:
 
 def get_correct_name(topic_name):
     rospy.logdebug("getting correct name for: " + str(topic_name))
-    splits = topic_name.split("/")
-    counter = 0
-    counter2 = 0
-    result = ""
-    while counter < len(splits):
-        if splits[-1] == splits[counter] and not counter == 1:
-            while counter2 <= counter - 1:
-                if counter2 != counter - 1:
-                    result += splits[counter2] + '/'
-                else:
-                    result += splits[counter2]
-                counter2 += 1
-            return result
-        counter += 1
+    splits = topic_name.split('/')
+    return string.join(splits[0:-1], '/')
 
 
 def getargarray(goal_class):
