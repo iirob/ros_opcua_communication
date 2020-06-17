@@ -15,6 +15,7 @@ jobs:
           - {ROS_DISTRO: melodic, ROS_REPO: main, ADDITIONAL_DEBS: "libxml2-dev libmbedtls-dev"}
     runs-on: ubuntu-18.04
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
+        submodules: 'true'
       - uses: 'ros-industrial/industrial_ci@master'
         env: ${{matrix.env}}
