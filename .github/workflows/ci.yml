@@ -10,11 +10,8 @@ jobs:
   industrial_ci:
     strategy:
       matrix:
-        global:
-          - ADDITIONAL_DEBS=libxml2-dev libmbedtls-dev
-          - BEFORE_INIT=export PYTHON=$PWD/ros_opcua_impl_python_opcua/python-opcua:$PYTHONPATH
         env:
-          - {ROS_DISTRO: kinetic, ROS_REPO: main}
+          - {ROS_DISTRO: kinetic, ROS_REPO: main, ADDITIONAL_DEBS=libxml2-dev libmbedtls-dev, BEFORE_INIT="export PYTHON=$PWD/ros_opcua_impl_python_opcua/python-opcua:$PYTHONPATH:"}
           - {ROS_DISTRO: melodic, ROS_REPO: main}
     runs-on: ubuntu-latest
     steps:
