@@ -20,4 +20,6 @@
   <depend>roscpp</depend>
   <depend>rospy</depend>
 
+  <depend>libmbedtls-dev</depend>
+
 </package>
