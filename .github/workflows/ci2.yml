@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
-        submodules: 'true'
+        with:
+          submodules: 'true'
       - uses: 'ros-industrial/industrial_ci@master'
         env: ${{matrix.env}}
