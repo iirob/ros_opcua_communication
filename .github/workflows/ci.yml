@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [ kinetic-devel ]
+  pull_request: 
+    branches: [ kinetic-devel ]
+
+jobs:
+  industrial_ci:
+    strategy:
+      matrix:
+        env:
+          - {ROS_DISTRO: kinetic, ROS_REPO: main, ADDITIONAL_DEBS: "libmbedtls-dev"}
+          - {ROS_DISTRO: melodic, ROS_REPO: main, ADDITIONAL_DEBS: "libmbedtls-dev"}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+      - uses: 'ros-industrial/industrial_ci@master'
+        env: ${{matrix.env}}
