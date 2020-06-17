@@ -13,6 +13,7 @@ jobs:
         env:
           - {ROS_DISTRO: kinetic, ROS_REPO: main, ADDITIONAL_DEBS: "libmbedtls-dev"}
           - {ROS_DISTRO: melodic, ROS_REPO: main, ADDITIONAL_DEBS: "libmbedtls-dev"}
+          - {ROS_DISTRO: noetic, ROS_REPO: main, ADDITIONAL_DEBS: "libmbedtls-dev"}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
