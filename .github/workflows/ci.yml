@@ -1,13 +1,19 @@
 name: CI
 
-on: [pull_request]
+on:
+  push:
+    branches: [ kinetic-devel ]
+  pull_request: [ kinetic-devel ]
 
 jobs:
   industrial_ci:
     strategy:
       matrix:
+        global:
+          - ADDITIONAL_DEBS=libxml2-dev libmbedtls-dev
+          - BEFORE_INIT=export PYTHON=$PWD/ros_opcua_impl_python_opcua/python-opcua:$PYTHONPATH
         env:
-          - {ROS_DISTRO: melodic, ROS_REPO: testing}
+          - {ROS_DISTRO: kinetic, ROS_REPO: main}
           - {ROS_DISTRO: melodic, ROS_REPO: main}
     runs-on: ubuntu-latest
     steps:

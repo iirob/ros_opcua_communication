@@ -4,7 +4,7 @@
   <version>0.2.0</version>
   <description>The ros_opcua_impl_freeopcua package implements bindings for freeopcua - Open Source C++ OPC-UA Server and Client Library.</description>
 
-  <maintainer email="denis.stogl@kit.edu">Denis Štogl</maintainer>
+  <maintainer email="denis@stogl.de">Denis Štogl</maintainer>
 
   <license>LGPLv3</license>
 
@@ -20,6 +20,4 @@
   <depend>roscpp</depend>
   <depend>rospy</depend>
 
-  <depend>libmbedtls-dev</depend>
-
-</package>
+  </package>
