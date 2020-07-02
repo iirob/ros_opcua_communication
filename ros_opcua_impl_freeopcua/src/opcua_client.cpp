@@ -46,7 +46,7 @@
 OpcUa::UaClient _client(false);
 /// Subscription list
 /** Key is OpcUa string node identifier and value subscription reference.*/
-std::map<std::string, std::unique_ptr<OpcUa::Subscription>> _subscriptions;
+std::map<std::string, std::shared_ptr<OpcUa::Subscription>> _subscriptions;
 /// Callback publishers list
 /** Key is OpcUa string node identifier and value ROS publisher */
 std::map<std::string, ros::Publisher> _callback_publishers;
