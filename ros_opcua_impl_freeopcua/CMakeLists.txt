@@ -19,8 +19,9 @@ find_package(catkin REQUIRED
 find_package(Boost REQUIRED COMPONENTS system thread)
 
 catkin_package(
- INCLUDE_DIRS include freeopcua/include
- CATKIN_DEPENDS roscpp ros_opcua_msgs ros_opcua_srvs
+  LIBRARIES opcuaprotocol opcuacore opcuaclient opcuaserver
+  INCLUDE_DIRS include freeopcua/include
+  CATKIN_DEPENDS roscpp ros_opcua_msgs ros_opcua_srvs
 )
 
 ###########
