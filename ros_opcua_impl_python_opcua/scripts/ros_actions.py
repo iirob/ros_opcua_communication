@@ -173,7 +173,7 @@ class OpcUaROSAction:
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
                                                              newparent)
                 # thrown when node with parent name is not existent in server
-                except IndexError, UaError:
+                except (IndexError, UaError) as e:
                     newparent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),

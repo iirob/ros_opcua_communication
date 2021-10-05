@@ -138,7 +138,7 @@ class OpcUaROSService:
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
                                                              newparent)
-                except IndexError, common.uaerrors.UaError:
+                except (IndexError, common.uaerrors.UaError) as e:
                     newparent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
